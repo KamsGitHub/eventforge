@@ -18,5 +18,5 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "prisma.config.ts"]
 }

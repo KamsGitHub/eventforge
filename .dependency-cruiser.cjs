@@ -35,10 +35,11 @@ module.exports = {
       exportsFields: ['exports'],
       conditionNames: ['require', 'node', 'default'],
     },
-    // Treat node_modules as leaves: we care about boundaries within our own
-    // src/ graph, not about circular deps inside third-party packages.
+    // Treat node_modules and the generated Prisma client as leaves: we care
+    // about boundaries within our own src/ graph, not about circular deps
+    // inside third-party or generated code.
     doNotFollow: {
-      path: 'node_modules',
+      path: 'node_modules|^generated',
     },
   },
 };
