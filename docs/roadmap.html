@@ -1,0 +1,1250 @@
+<title>EventForge — Build Roadmap</title>
+<style>
+  :root{
+    --bg:#f0f2f4;
+    --surface:#ffffff;
+    --surface-2:#e7eaee;
+    --text:#1b2430;
+    --muted:#5b6472;
+    --border:#d7dce2;
+    --accent:#1f6f6a;
+    --accent-soft:#dcece9;
+    --accent-2:#a8631d;
+    --accent-2-soft:#f2e3d1;
+    --code-bg:#e9edf1;
+    --st-pending:#6b7280;
+    --st-queued:#2563a8;
+    --st-running:#b5891f;
+    --st-succeeded:#1f7a4d;
+    --st-failed:#b3402f;
+    --st-dead:#7a2734;
+    --st-cancelled:#6b4fa0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#10151c;
+      --surface:#1a222c;
+      --surface-2:#212b37;
+      --text:#e6e9ed;
+      --muted:#8b96a3;
+      --border:#2c3745;
+      --accent:#4fb3ab;
+      --accent-soft:#193531;
+      --accent-2:#d69a4e;
+      --accent-2-soft:#3a2c19;
+      --code-bg:#161d26;
+      --st-pending:#9aa4b2;
+      --st-queued:#6ea8dc;
+      --st-running:#e0b84a;
+      --st-succeeded:#5fbf8f;
+      --st-failed:#e0685a;
+      --st-dead:#c9707d;
+      --st-cancelled:#b09be0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10151c; --surface:#1a222c; --surface-2:#212b37; --text:#e6e9ed; --muted:#8b96a3;
+    --border:#2c3745; --accent:#4fb3ab; --accent-soft:#193531; --accent-2:#d69a4e; --accent-2-soft:#3a2c19;
+    --code-bg:#161d26; --st-pending:#9aa4b2; --st-queued:#6ea8dc; --st-running:#e0b84a; --st-succeeded:#5fbf8f;
+    --st-failed:#e0685a; --st-dead:#c9707d; --st-cancelled:#b09be0;
+  }
+  :root[data-theme="light"]{
+    --bg:#f0f2f4; --surface:#ffffff; --surface-2:#e7eaee; --text:#1b2430; --muted:#5b6472;
+    --border:#d7dce2; --accent:#1f6f6a; --accent-soft:#dcece9; --accent-2:#a8631d; --accent-2-soft:#f2e3d1;
+    --code-bg:#e9edf1; --st-pending:#6b7280; --st-queued:#2563a8; --st-running:#b5891f; --st-succeeded:#1f7a4d;
+    --st-failed:#b3402f; --st-dead:#7a2734; --st-cancelled:#6b4fa0;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    font-size:17px; line-height:1.6;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:56px 24px 120px;}
+
+  h1,h2,h3,h4,.eyebrow,.chip,.milestone summary .title{
+    font-family:ui-sans-serif,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  h1{font-size:2.5rem; font-weight:800; letter-spacing:-0.02em; text-wrap:balance; margin:0 0 6px;}
+  h2{font-size:1.5rem; font-weight:800; letter-spacing:-0.01em; margin:56px 0 16px; text-wrap:balance;
+     border-bottom:1px solid var(--border); padding-bottom:10px;}
+  h3{font-size:1.05rem; font-weight:700; margin:24px 0 8px;}
+  p{margin:0 0 14px;}
+  code, .mono{font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace; font-size:0.88em;}
+  code{background:var(--code-bg); padding:0.1em 0.4em; border-radius:4px;}
+  pre{background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+      overflow-x:auto; font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace; font-size:0.85em; line-height:1.55;}
+  pre code{background:none; padding:0;}
+  a{color:var(--accent);}
+  ul, ol{padding-left:1.3em; margin:0 0 14px;}
+  li{margin-bottom:4px;}
+
+  .subtitle{color:var(--muted); font-size:1.05rem; margin:0 0 32px; max-width:60ch;}
+  .meta-row{display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:0.85rem; font-family:ui-sans-serif,sans-serif; margin-bottom:8px;}
+
+  .callout{
+    border:1px solid var(--border); background:var(--surface); border-radius:10px;
+    padding:20px 22px; margin:24px 0;
+  }
+  .callout.accent{border-left:4px solid var(--accent);}
+  .callout.warn{border-left:4px solid var(--accent-2);}
+  .callout h3{margin-top:0;}
+  .callout ul{margin-bottom:0;}
+  .callout li{margin-bottom:10px;}
+  .callout li b{color:var(--text);}
+
+  .toc{display:flex; flex-direction:column; gap:14px; margin:20px 0 32px;}
+  .toc-phase{font-family:ui-sans-serif,sans-serif; font-size:0.72rem; font-weight:700; letter-spacing:0.08em;
+             text-transform:uppercase; color:var(--muted); margin-bottom:6px;}
+  .toc-links{display:flex; flex-wrap:wrap; gap:6px;}
+  .toc-links a{
+    font-family:ui-sans-serif,sans-serif; font-size:0.82rem; text-decoration:none; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:20px; padding:4px 12px;
+  }
+  .toc-links a:hover{border-color:var(--accent); color:var(--accent);}
+
+  table{width:100%; border-collapse:collapse; font-size:0.88rem;}
+  .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:8px; margin:16px 0;}
+  th, td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top;}
+  thead th{background:var(--surface-2); font-family:ui-sans-serif,sans-serif; font-size:0.72rem;
+           text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:700;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num, th.num{font-variant-numeric:tabular-nums; font-family:ui-monospace,monospace;}
+
+  .state-chip{
+    display:inline-block; font-family:ui-sans-serif,sans-serif; font-size:0.72rem; font-weight:700;
+    letter-spacing:0.03em; padding:2px 9px; border-radius:5px; color:#fff;
+  }
+  .st-PENDING{background:var(--st-pending);} .st-QUEUED{background:var(--st-queued);}
+  .st-RUNNING{background:var(--st-running); color:#241a02;} .st-SUCCEEDED{background:var(--st-succeeded);}
+  .st-FAILED{background:var(--st-failed);} .st-DEAD_LETTERED{background:var(--st-dead);}
+  .st-CANCELLED{background:var(--st-cancelled);}
+
+  .phase-label{
+    font-family:ui-sans-serif,sans-serif; font-size:0.72rem; font-weight:700; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--accent); margin:40px 0 -6px;
+  }
+
+  .milestone{
+    border:1px solid var(--border); border-left:4px solid var(--accent);
+    background:var(--surface); border-radius:10px; margin:16px 0; overflow:hidden;
+  }
+  .milestone summary{
+    cursor:pointer; padding:16px 20px; display:flex; align-items:baseline; gap:14px;
+    list-style:none; user-select:none;
+  }
+  .milestone summary::-webkit-details-marker{display:none;}
+  .milestone summary::before{
+    content:"▸"; color:var(--accent); font-size:0.8em; transition:transform 0.15s ease; flex:none;
+  }
+  .milestone[open] summary::before{transform:rotate(90deg);}
+  .milestone summary .num{
+    font-family:ui-monospace,monospace; color:var(--accent); font-weight:700; font-size:0.95rem; flex:none;
+  }
+  .milestone summary .title{font-weight:700; font-size:1.02rem; flex:1; min-width:0;}
+  .milestone summary .obj{
+    display:block; font-family:"Iowan Old Style",Georgia,serif; font-weight:400; color:var(--muted);
+    font-size:0.85rem; margin-top:2px;
+  }
+  .m-body{padding:4px 20px 22px 20px; border-top:1px solid var(--border);}
+  .m-body h4{
+    font-family:ui-sans-serif,sans-serif; font-size:0.72rem; font-weight:700; letter-spacing:0.07em;
+    text-transform:uppercase; color:var(--accent); margin:20px 0 6px;
+  }
+  .m-body h4:first-child{margin-top:18px;}
+  .not-yet{
+    background:var(--accent-2-soft); border:1px solid var(--accent-2); border-radius:6px;
+    padding:8px 12px; font-size:0.88rem; color:var(--text);
+  }
+  .commits{list-style:none; padding-left:0;}
+  .commits li{margin-bottom:6px;}
+  .commits code{display:inline-block;}
+
+  .mermaid{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; overflow-x:auto;}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0;}
+  @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .card h4{margin:0 0 8px; font-family:ui-sans-serif,sans-serif; font-size:0.95rem; color:var(--text);}
+
+  .final-defs{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0;}
+  @media (max-width:640px){.final-defs{grid-template-columns:1fr;}}
+  .final-defs .card{border-left:4px solid var(--accent);}
+  .final-defs .card.full{border-left-color:var(--accent-2);}
+
+  hr.rule{border:none; border-top:1px solid var(--border); margin:48px 0;}
+  .footer-note{color:var(--muted); font-size:0.85rem; margin-top:60px;}
+</style>
+
+<div class="wrap">
+
+  <div class="eyebrow" style="font-size:0.78rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent);">Portfolio Project Roadmap</div>
+  <h1>EventForge</h1>
+  <p class="subtitle">A Kafka-based distributed job processing platform in TypeScript — from modular monolith to independently deployable services. Twenty-four milestones, each independently buildable and committable.</p>
+  <div class="meta-row">
+    <span>Stack: Fastify · PostgreSQL · Prisma · Kafka (KafkaJS) · Zod · Jest · Testcontainers · Pino · Prometheus/Grafana · React</span>
+  </div>
+
+  <div class="callout warn">
+    <h3>Where I'd adjust your plan</h3>
+    <p>The architecture you laid out is already sound — these are refinements, not objections.</p>
+    <ul>
+      <li><b>Tiered retry topics, not one.</b> Use <code>jobs.retry-1</code> / <code>jobs.retry-2</code> / <code>jobs.retry-3</code> with per-tier delay, rather than a single retry topic. You can see backlog-per-tier in monitoring, and a job stuck at tier 3 is a meaningfully different signal than one at tier 1. Detailed in <a href="#m11">Milestone 11</a>.</li>
+      <li><b>Isolate event contracts from Milestone 6, not at extraction time.</b> Build <code>src/contracts</code> (envelope + zod schemas + schema versions) as its own internal module the moment Kafka is introduced. At extraction (<a href="#m18">M18</a>) it becomes <code>packages/event-contracts</code> with zero rewrite — that's the whole payoff.</li>
+      <li><b>Enforce module boundaries from day one, not just validated at M17.</b> Wire dependency-cruiser or eslint-plugin-boundaries in <a href="#m1">Milestone 1</a>, set to error-level immediately. Retrofitting a boundary rule onto code that already violates it is far more expensive than starting with the guardrail on.</li>
+      <li><b>Execution must never touch the Job table, even pre-extraction.</b> Only the jobs module's own status consumer writes <code>Job.status</code>, from day one in the monolith. This is what makes the M18 extraction a deployment change instead of a rewrite — build the discipline before there's a network boundary to enforce it.</li>
+      <li><b>Prisma has no native <code>SELECT ... FOR UPDATE SKIP LOCKED</code>.</b> You'll need <code>$queryRaw</code> for the outbox publisher's row-claiming in <a href="#m9">Milestone 9</a> — flagging this now so it doesn't stall you mid-milestone.</li>
+      <li><b>Add a thin CI loop from Milestone 1</b> (lint + typecheck + unit tests on every push), not just at Milestone 24. Full build/deploy pipelines stay at the end; fast feedback shouldn't wait that long.</li>
+      <li><b>Two different "idempotency" concepts share a word, not a table.</b> The <code>Idempotency-Key</code> HTTP header (<a href="#m5">M5</a>, duplicate job submission) and Kafka consumer idempotency via <code>ProcessedEvent</code> (<a href="#m10">M10</a>, duplicate event delivery) solve different problems — keep them as separate tables and separate mental models.</li>
+      <li><b>Job timeouts needed an explicit home</b> — your spec listed them as a reliability requirement but didn't attach them to a milestone. Folded into <a href="#m11">Milestone 11</a> as a watchdog alongside retry/DLQ, since a timeout is really just another path into the failure/retry pipeline.</li>
+    </ul>
+  </div>
+
+  <h2 id="toc">Milestone Index</h2>
+  <div class="toc">
+    <div>
+      <div class="toc-phase">Foundation</div>
+      <div class="toc-links">
+        <a href="#m1">1 · Repo &amp; TS foundation</a>
+        <a href="#m2">2 · Docker: Postgres + Kafka</a>
+        <a href="#m3">3 · Fastify bootstrap</a>
+        <a href="#m4">4 · Prisma job persistence</a>
+        <a href="#m5">5 · Job creation/retrieval API</a>
+      </div>
+    </div>
+    <div>
+      <div class="toc-phase">Event-Driven Core</div>
+      <div class="toc-links">
+        <a href="#m6">6 · Kafka producer/consumer foundation</a>
+        <a href="#m7">7 · Async job execution</a>
+        <a href="#m8">8 · Lifecycle events &amp; status</a>
+      </div>
+    </div>
+    <div>
+      <div class="toc-phase">Reliability</div>
+      <div class="toc-links">
+        <a href="#m9">9 · Transactional outbox</a>
+        <a href="#m10">10 · Idempotent consumers</a>
+        <a href="#m11">11 · Retry &amp; dead-letter</a>
+        <a href="#m12">12 · Cancel &amp; manual retry</a>
+      </div>
+    </div>
+    <div>
+      <div class="toc-phase">Observability &amp; Testing</div>
+      <div class="toc-links">
+        <a href="#m13">13 · Structured logging &amp; correlation</a>
+        <a href="#m14">14 · Metrics &amp; Grafana</a>
+        <a href="#m15">15 · Testcontainers integration</a>
+        <a href="#m16">16 · Operational dashboard</a>
+      </div>
+    </div>
+    <div>
+      <div class="toc-phase">Extraction</div>
+      <div class="toc-links">
+        <a href="#m17">17 · Boundary validation</a>
+        <a href="#m18">18 · Execution-service extraction</a>
+        <a href="#m19">19 · Separate databases</a>
+        <a href="#m20">20 · Eventual consistency</a>
+        <a href="#m21">21 · Notification-service extraction</a>
+        <a href="#m22">22 · Audit-service extraction</a>
+      </div>
+    </div>
+    <div>
+      <div class="toc-phase">Capstone</div>
+      <div class="toc-links">
+        <a href="#m23">23 · Load testing</a>
+        <a href="#m24">24 · Deployment &amp; CI/CD</a>
+      </div>
+    </div>
+  </div>
+
+  <h2 id="cross-cutting">Cross-Cutting Decisions</h2>
+  <p>These are fixed once and referenced by every milestone below, rather than re-litigated each time.</p>
+
+  <h3>Job state machine</h3>
+  <p>Enforced in exactly one place: <code>Job.transitionTo()</code> in <code>modules/jobs/domain/job.entity.ts</code>. Every API route and every Kafka consumer that changes a job's status goes through the jobs module's own service/repository, which calls this method — nothing else is permitted to write the <code>status</code> column directly. This is a discipline choice, not a framework feature, and it's what makes the execution extraction (<a href="#m18">M18</a>) safe.</p>
+
+  <pre class="mermaid">
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> QUEUED: outbox publisher confirms send
+    PENDING --> CANCELLED: cancel (pre-dispatch)
+    QUEUED --> RUNNING: jobs.started consumed
+    QUEUED --> CANCELLED: cancel (pre-dispatch)
+    RUNNING --> SUCCEEDED: jobs.completed consumed
+    RUNNING --> FAILED: jobs.failed consumed
+    RUNNING --> CANCELLED: cooperative cancel flag observed
+    FAILED --> QUEUED: automatic retry (retry topic) or manual retry
+    FAILED --> DEAD_LETTERED: retries exhausted
+    DEAD_LETTERED --> QUEUED: manual retry only
+    SUCCEEDED --> [*]
+    CANCELLED --> [*]
+  </pre>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>State</th><th>Meaning</th><th>Terminal?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="state-chip st-PENDING">PENDING</span></td><td>Row + outbox event committed; not yet handed to Kafka.</td><td>No</td></tr>
+      <tr><td><span class="state-chip st-QUEUED">QUEUED</span></td><td>Outbox publisher sent <code>JobRequested</code> to Kafka.</td><td>No</td></tr>
+      <tr><td><span class="state-chip st-RUNNING">RUNNING</span></td><td>Execution consumer picked it up (<code>jobs.started</code> observed).</td><td>No</td></tr>
+      <tr><td><span class="state-chip st-SUCCEEDED">SUCCEEDED</span></td><td>Handler completed successfully.</td><td>Yes</td></tr>
+      <tr><td><span class="state-chip st-FAILED">FAILED</span></td><td>An attempt failed; may still have retry budget.</td><td>No</td></tr>
+      <tr><td><span class="state-chip st-DEAD_LETTERED">DEAD_LETTERED</span></td><td>Retry budget exhausted; requires manual intervention.</td><td>Semi (manual retry only)</td></tr>
+      <tr><td><span class="state-chip st-CANCELLED">CANCELLED</span></td><td>User-cancelled, pre-dispatch or cooperatively mid-run.</td><td>Yes</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Event envelope</h3>
+  <p>Every Kafka message uses this shape, defined once in <code>src/contracts/envelope.ts</code> (later <code>packages/event-contracts</code>). Message key is always the <code>jobId</code>, so all events for one job stay in the same partition and are processed in order.</p>
+  <pre><code>{
+  "eventId":       "uuid",
+  "eventType":     "JobRequested" | "JobStarted" | "JobCompleted" | "JobFailed" | "...",
+  "aggregateId":   "jobId",
+  "correlationId": "uuid — same value for one job's entire lifecycle",
+  "causationId":   "uuid | null — eventId of the event that triggered this one",
+  "occurredAt":    "ISO-8601 timestamp",
+  "schemaVersion": 1,
+  "payload":       { /* event-specific, zod-validated per schemaVersion */ }
+}</code></pre>
+
+  <h3>Kafka topics</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Topic</th><th>Event(s)</th><th>Produced by</th><th>Consumed by</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">jobs.requested</td><td class="mono">JobRequested</td><td>outbox publisher (jobs module)</td><td>execution module</td></tr>
+      <tr><td class="mono">jobs.started</td><td class="mono">JobStarted</td><td>execution module</td><td>jobs status consumer, audit</td></tr>
+      <tr><td class="mono">jobs.completed</td><td class="mono">JobCompleted</td><td>execution module</td><td>jobs status consumer, notifications, audit</td></tr>
+      <tr><td class="mono">jobs.failed</td><td class="mono">JobFailed</td><td>execution module</td><td>jobs status consumer, retry router, notifications, audit</td></tr>
+      <tr><td class="mono">jobs.retry-1 / -2 / -3</td><td class="mono">JobRequested (attempt N)</td><td>retry router</td><td>execution module</td></tr>
+      <tr><td class="mono">jobs.dead-letter</td><td>failed event + failure history</td><td>retry router (on exhaustion)</td><td>jobs status consumer, audit</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="color:var(--muted); font-size:0.9rem;">All topics created explicitly via a bootstrap script (<a href="#m2">M2</a>), never via broker auto-create. 3 partitions / replication factor 1 for local dev.</p>
+
+  <h3>Consumer group naming</h3>
+  <p><code>eventforge.&lt;module-or-service&gt;.&lt;purpose&gt;</code> — e.g. <code>eventforge.jobs.status-consumer</code>, <code>eventforge.execution.job-requested-consumer</code>, <code>eventforge.audit.event-sink</code>. This name is also the <code>consumerName</code> key in <code>ProcessedEvent</code> (<a href="#m10">M10</a>), so keep it stable once chosen.</p>
+
+  <div class="phase-label">Phase 1 — Foundation</div>
+
+  <details class="milestone" id="m1" open>
+    <summary><span class="num">01</span><span class="title">Repository &amp; TypeScript foundation<span class="obj">Skeleton, strict TS, lint, and module-boundary guardrails — before any framework code.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Single-package repo (workspace-ready for the later monorepo split), strict <code>tsconfig.json</code> (<code>strict</code>, <code>noUncheckedIndexedAccess</code>)</li>
+        <li>ESLint + Prettier; full folder skeleton per the target structure, including <code>modules/{jobs,execution,notifications,audit}/{api,application,domain,infrastructure}</code></li>
+        <li><code>.env.example</code>; npm scripts for <code>build</code>/<code>test</code>/<code>lint</code>/<code>typecheck</code></li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <ul>
+        <li>Package-by-feature at the top level: modules own their vertical slice; <code>shared/</code> holds only cross-cutting technical code (logger, base error types) — never business logic</li>
+        <li>Modules may only import another module's <code>api/</code> surface, never its <code>application</code>/<code>domain</code>/<code>infrastructure</code> directly — enforced now via dependency-cruiser, not deferred to <a href="#m17">M17</a></li>
+      </ul>
+      <h4>Files &amp; folders</h4>
+      <p>Full tree per spec, plus <code>.dependency-cruiser.cjs</code>, <code>.eslintrc</code></p>
+      <h4>Database changes</h4><p>None.</p>
+      <h4>Kafka topics &amp; events</h4><p>None.</p>
+      <h4>Tests</h4>
+      <p>One smoke test proving the toolchain (ts-jest/swc, path aliases) resolves end-to-end.</p>
+      <h4>Completion criteria</h4>
+      <p><code>lint && typecheck && test</code> pass on a clean clone; a deliberate cross-module domain import fails the dependency-cruiser check (prove it, then remove it).</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Putting DB helpers in <code>shared/</code> — becomes a smuggled coupling point later</li>
+        <li>Deferring boundary rules "until it matters" — retrofitting after code exists is the expensive path</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> no Fastify, no Prisma, no Docker, no Kafka — skeleton and guardrails only.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>chore: scaffold repo, strict tsconfig, eslint/prettier</code></li>
+        <li><code>chore: add module boundary enforcement via dependency-cruiser</code></li>
+        <li><code>ci: add lint/typecheck/test workflow</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m2">
+    <summary><span class="num">02</span><span class="title">Dockerized PostgreSQL and Kafka<span class="obj">Reproducible local infra, topics created explicitly, no app code yet.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>docker-compose.yml</code>: Postgres 16, Kafka in <b>KRaft mode</b> (no ZooKeeper — simpler, and the modern default for new Kafka projects), healthchecks, optional Kafka UI</li>
+        <li><code>infrastructure/kafka/create-topics.sh</code> — idempotent topic bootstrap, not broker auto-create</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Fixed topic list created explicitly at known partition counts. Auto-create in any environment is a footgun: wrong partition counts, no explicit ownership, silent topic creation on typos.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>infrastructure/docker-compose.yml</code>, <code>infrastructure/kafka/create-topics.sh</code>, <code>infrastructure/postgres/</code></p>
+      <h4>Database changes</h4><p>Empty database exists; no schema.</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>Create the full set now: <code class="mono">jobs.requested, jobs.started, jobs.completed, jobs.failed, jobs.retry-1, jobs.retry-2, jobs.retry-3, jobs.dead-letter</code> — 3 partitions, replication 1.</p>
+      <h4>Tests</h4>
+      <p><code>docker-compose config</code> validation; manual smoke check documented in README (<code>psql \dt</code>, <code>kafka-topics --list</code>).</p>
+      <h4>Completion criteria</h4>
+      <p><code>docker compose up -d</code> yields healthy containers; topic list matches spec exactly.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Relying on topic auto-create</li>
+        <li>Skipping healthchecks — app race-starts against a broker that isn't ready yet</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> no app code talks to Postgres or Kafka yet.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>infra: add docker-compose for postgres and kafka (KRaft)</code></li>
+        <li><code>infra: add idempotent topic bootstrap script</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m3">
+    <summary><span class="num">03</span><span class="title">Fastify application bootstrap<span class="obj">A running, testable HTTP server with validated config and graceful shutdown.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>src/config/env.ts</code> — zod-validated environment, fail fast on boot</li>
+        <li><code>src/app.ts</code> (pure, no <code>listen()</code>) vs <code>src/server.ts</code> (entrypoint, wires SIGTERM/SIGINT)</li>
+        <li><code>GET /health</code> liveness endpoint</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Splitting <code>app.ts</code>/<code>server.ts</code> lets tests use <code>app.inject()</code> without binding a port. Typed config passed via Fastify decoration, never read ad hoc from <code>process.env</code> inside modules.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/app.ts</code>, <code>src/server.ts</code>, <code>src/config/env.ts</code>, <code>src/shared/logger.ts</code> (pino, no correlation wiring yet)</p>
+      <h4>Database changes</h4><p>None.</p>
+      <h4>Kafka topics &amp; events</h4><p>None.</p>
+      <h4>Tests</h4>
+      <p><code>app.inject()</code> test for <code>/health</code>; config test — invalid env throws a clear error at load time.</p>
+      <h4>Completion criteria</h4>
+      <p><code>npm run dev</code> boots; Ctrl+C shuts down cleanly with no hanging handles.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Scattering <code>process.env</code> reads across files instead of one validated source of truth</li>
+        <li>Calling <code>app.listen()</code> inside <code>app.ts</code>, blocking injection-based testing</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> no DB, no Kafka, no job routes.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat: bootstrap fastify app with zod-validated config</code></li>
+        <li><code>feat: add health endpoint and graceful shutdown</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m4">
+    <summary><span class="num">04</span><span class="title">Prisma job persistence<span class="obj">The Job aggregate and its state machine, persisted — no outbox yet.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Prisma schema with <code>Job</code> model + <code>JobStatus</code> enum; first migration</li>
+        <li><code>JobRepository</code> port in <code>domain/</code>, Prisma-backed implementation in <code>infrastructure/</code></li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p><code>domain/job.entity.ts</code> owns <code>transitionTo()</code> encoding the state machine; <code>infrastructure/prisma-job.repository.ts</code> is the <i>only</i> file in the jobs module allowed to import <code>PrismaClient</code> — this is the seam the later extraction cuts along. Optimistic concurrency via a <code>version</code> column: update <code>WHERE id = ? AND version = ?</code>, zero rows affected means a conflict.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>prisma/schema.prisma</code>, <code>modules/jobs/domain/job.entity.ts</code>, <code>modules/jobs/domain/job-repository.port.ts</code>, <code>modules/jobs/infrastructure/prisma-job.repository.ts</code></p>
+      <h4>Database changes</h4>
+      <p class="mono">Job: id (uuid pk), type, status, payload (jsonb), result (jsonb, nullable), error (text, nullable), attempt (int, default 0), maxAttempts (int, default 3), idempotencyKey (unique, nullable), correlationId, version (int, default 0), createdAt, updatedAt, startedAt (nullable), completedAt (nullable)</p>
+      <h4>Kafka topics &amp; events</h4><p>None yet.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Repository integration tests against real Postgres (create, findById, version-checked update — prove a stale-version update is rejected)</li>
+        <li>Entity unit tests for <code>transitionTo()</code>: every legal and illegal transition</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>Migration applies cleanly; repository tests pass against real Postgres; illegal transitions throw a typed domain error.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Letting <code>@prisma/client</code> types leak into <code>domain/</code> — infrastructure maps between Prisma rows and the domain entity</li>
+        <li>Skipping the version check and silently losing concurrent updates</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> no API routes, no outbox, no Kafka.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(jobs): add Job prisma schema and migration</code></li>
+        <li><code>feat(jobs): add Job domain entity with state machine</code></li>
+        <li><code>feat(jobs): add Prisma-backed JobRepository with optimistic concurrency</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m5">
+    <summary><span class="num">05</span><span class="title">Job creation and retrieval API<span class="obj">POST/GET endpoints against Postgres; jobs sit in PENDING (no Kafka yet).</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Zod request/response schemas; <code>JobService</code> (create/get/list) in <code>application/</code>; Fastify routes in <code>api/</code></li>
+        <li>Client-supplied <code>Idempotency-Key</code> header + unique DB constraint — duplicate submissions return the original job instead of erroring</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>This HTTP-level idempotency key is a distinct mechanism from Kafka consumer idempotency (<a href="#m10">M10</a>) — different table, different concern, don't conflate them.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>modules/jobs/api/routes.ts</code>, <code>modules/jobs/api/schemas.ts</code>, <code>modules/jobs/application/job.service.ts</code></p>
+      <h4>Database changes</h4><p>Unique index on <code>idempotencyKey</code> (nullable-unique).</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>None yet — jobs created here stay <span class="state-chip st-PENDING">PENDING</span> until <a href="#m9">M9</a> wires publishing. Note this explicitly in code so it isn't mistaken for a bug.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Route tests via <code>app.inject()</code>: valid create, validation failure, duplicate idempotency key, 404 on unknown id</li>
+        <li><code>JobService</code> unit tests against an in-memory fake repository</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>curl POST/GET round-trips through Postgres; duplicate idempotency key returns the original job, not a new row.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Ad hoc validation in route handlers instead of shared zod schemas</li>
+        <li>Reusing the HTTP idempotency table for Kafka consumer deduplication</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> retry/cancel endpoints (<a href="#m12">M12</a>), any Kafka involvement.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(jobs): add POST /api/jobs with idempotency-key support</code></li>
+        <li><code>feat(jobs): add GET /api/jobs and GET /api/jobs/:id</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="phase-label">Phase 2 — Event-Driven Core</div>
+
+  <details class="milestone" id="m6">
+    <summary><span class="num">06</span><span class="title">Kafka producer and consumer foundation<span class="obj">Reusable KafkaJS wrapper, event envelope, and the contracts module — before any real event flows.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>src/messaging</code> wraps KafkaJS: idempotent producer (<code>idempotent: true</code>, <code>acks: 'all'</code>), a consumer factory taking topic + groupId + handler</li>
+        <li><code>src/contracts</code> — the envelope factory and per-event zod schemas, versioned from day one</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Build <code>src/contracts</code> now, deliberately ahead of need — it becomes <code>packages/event-contracts</code> unchanged at extraction (<a href="#m18">M18</a>). This is built before the outbox (<a href="#m9">M9</a>) and idempotent consumption (<a href="#m10">M10</a>) so those milestones can focus purely on their own concern instead of also inventing the wire format.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/messaging/kafka-client.ts</code>, <code>src/messaging/producer.ts</code>, <code>src/messaging/consumer.ts</code>, <code>src/contracts/envelope.ts</code>, <code>src/contracts/events/</code></p>
+      <h4>Database changes</h4><p>None.</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>A throwaway <code class="mono">_dev.ping</code> topic for the foundation test — kept separate from real topics to avoid polluting them with test noise.</p>
+      <h4>Tests</h4>
+      <p>Integration test (docker-compose or testcontainers broker): produce, consume, assert the envelope round-trips through zod parsing; assert graceful <code>consumer.disconnect()</code>.</p>
+      <h4>Completion criteria</h4>
+      <p>A script/test produces and consumes a real message end-to-end through the wrapper.</p>
+      <h4>Common mistakes</h4>
+      <p>Designing the envelope ad hoc per-event instead of one shared generic type — this contract is painful to change once events exist on real topics, so fix the shape now.</p>
+      <div class="not-yet"><b>Not yet:</b> no business logic consumes yet; outbox not built.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(messaging): add KafkaJS wrapper (producer/consumer factories)</code></li>
+        <li><code>feat(contracts): add event envelope and schema-versioned event types</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m7">
+    <summary><span class="num">07</span><span class="title">Basic asynchronous job execution<span class="obj">Execution module consumes/handles/publishes directly — Job table untouched.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>JobHandler</code> registry (<code>execute(payload): Promise&lt;Result&gt;</code>) with a <code>GENERATE_REPORT</code> handler (simulated work)</li>
+        <li>Consumes <code>jobs.requested</code>, publishes <code>jobs.completed</code>/<code>jobs.failed</code> directly (no outbox on the way out yet — isolated to <a href="#m9">M9</a>)</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>The handler registry is the extension point for future job types — adding one is one map entry. Execution never touches the Job table directly, even here, pre-extraction — it only publishes events (see the cross-cutting rule above).</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>modules/execution/domain/job-handler.port.ts</code>, <code>modules/execution/domain/handlers/generate-report.handler.ts</code>, <code>modules/execution/application/execute-job.service.ts</code>, <code>modules/execution/infrastructure/jobs-requested.consumer.ts</code></p>
+      <h4>Database changes</h4><p>None new (attempt history deferred to <a href="#m8">M8</a>/service extraction).</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>Consumes <code class="mono">jobs.requested</code>; publishes <code class="mono">jobs.completed</code> or <code class="mono">jobs.failed</code>.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Handler unit test (simulated success/failure)</li>
+        <li>Consumer integration test: publish <code>JobRequested</code>, assert a <code>JobCompleted</code> appears on the output topic</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>Manually POST a job, observe it consumed and a completion event published (the Job row itself doesn't update yet — that's <a href="#m8">M8</a>).</p>
+      <h4>Common mistakes</h4>
+      <p>Letting the handler reach into the jobs module's repository "just this once" — breaks the exact boundary you're about to extract along.</p>
+      <div class="not-yet"><b>Not yet:</b> job status isn't updated in Postgres; no outbox; no retries.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(execution): add job handler registry and GENERATE_REPORT handler</code></li>
+        <li><code>feat(execution): consume jobs.requested and publish completion/failure events</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m8">
+    <summary><span class="num">08</span><span class="title">Job lifecycle events and status updates<span class="obj">Close the loop — the full 11-step workflow works, at-most-once.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Jobs module's status consumer listens to <code>jobs.started</code>/<code>completed</code>/<code>failed</code>, calls <code>transitionTo()</code></li>
+        <li>Execution publishes <code>JobStarted</code> before invoking the handler; <code>JobService.create</code> now really produces <code>JobRequested</code> (still a direct <code>producer.send</code>, not outbox yet)</li>
+      </ul>
+      <h4>Files &amp; folders</h4>
+      <p><code>modules/jobs/infrastructure/job-status.consumer.ts</code></p>
+      <h4>Database changes</h4><p>None new.</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>Full loop now flows through real topics: <code class="mono">jobs.requested → jobs.started → jobs.completed|failed</code>.</p>
+      <h4>Tests</h4>
+      <p>In-process end-to-end test (real Kafka + Postgres): POST a job, poll GET until terminal, assert final state and timestamps.</p>
+      <h4>Completion criteria</h4>
+      <p>The full spec'd 11-step workflow works manually and via an automated e2e test — minus outbox and idempotency guarantees, which are explicitly next.</p>
+      <h4>Common mistakes</h4>
+      <p>Updating the Job row from inside execution "temporarily" — even temporary exceptions create a habit and a hidden coupling.</p>
+      <div class="not-yet"><b>Not yet:</b> outbox (a crash between job insert and Kafka publish still loses the event — this exact gap is what <a href="#m9">M9</a> closes); consumer idempotency (duplicate events currently double-apply, acceptable for now, fixed in <a href="#m10">M10</a>).</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(jobs): add job-status consumer for started/completed/failed events</code></li>
+        <li><code>test: add end-to-end job lifecycle test</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="phase-label">Phase 3 — Reliability</div>
+
+  <details class="milestone" id="m9">
+    <summary><span class="num">09</span><span class="title">Transactional outbox<span class="obj">Job + JobRequested committed atomically; a polling publisher moves rows to Kafka.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>OutboxEvent</code> table; Job creation and outbox insert happen in one Prisma transaction</li>
+        <li>Polling publisher: claims unpublished rows, sends to Kafka, marks <code>publishedAt</code></li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Row claiming for concurrent publishers needs <code>SELECT ... FOR UPDATE SKIP LOCKED</code>, which Prisma Client has no first-class API for — use <code>$queryRaw</code>. Explicitly document the residual gap: if the process crashes after Kafka <code>send()</code> acks but before the <code>publishedAt</code> UPDATE commits, the row is retried and the event is sent twice. The outbox guarantees <b>at-least-once</b>, never exactly-once — that's precisely why consumers must be idempotent (<a href="#m10">M10</a>).</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/outbox/outbox.repository.ts</code>, <code>src/outbox/outbox-publisher.ts</code>, <code>src/outbox/outbox.types.ts</code></p>
+      <h4>Database changes</h4>
+      <p class="mono">OutboxEvent: id, aggregateId, eventType, topic, messageKey, payload (jsonb), createdAt, publishedAt (nullable), publishingAttempts (int, default 0), lastError (text, nullable); partial index on unpublished rows</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p><code>JobService.create</code> now writes Job + <code>OutboxEvent(JobRequested)</code> in one transaction; the M8 direct <code>producer.send</code> call is removed.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Concurrent-publisher claim test (two publisher instances against testcontainers-postgres — no row claimed twice)</li>
+        <li>Failure-injection test: kill the publisher after send but before <code>markPublished</code>, restart, assert republishing (proves at-least-once, not exactly-once)</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>Killing the app between job insert and Kafka publish never loses the <code>JobRequested</code> event; the publisher recovers unpublished rows on restart.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Trying to make <code>markPublished</code> part of the same transaction as the Kafka send — impossible, Kafka isn't transactional with Postgres</li>
+        <li>Forgetting <code>SKIP LOCKED</code> and letting two publisher instances double-claim rows</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> multi-instance publisher coordination beyond SKIP LOCKED; CDC/Debezium (worth a README mention as an alternative, out of scope here).</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(outbox): add OutboxEvent model and transactional insert with Job creation</code></li>
+        <li><code>feat(outbox): add polling publisher with SKIP LOCKED claiming</code></li>
+        <li><code>test(outbox): add crash-recovery and duplicate-publish tests</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m10">
+    <summary><span class="num">10</span><span class="title">Idempotent consumers<span class="obj">Make redelivery from the outbox's at-least-once guarantee safe.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>ProcessedEvent(eventId, consumerName)</code> with a <b>unique constraint</b> on the pair</li>
+        <li>Reusable <code>idempotent-consumer</code> wrapper: insert-or-skip → apply business change → create outbox events → commit → <i>then</i> commit the Kafka offset</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>The unique constraint is what makes concurrent redelivery (e.g. a brief overlap during a rebalance) safe: two processes racing to insert the same <code>(eventId, consumerName)</code> — the DB serializes it, the loser's insert fails, and it no-ops instead of double-applying. Disable Kafka auto-commit (<code>autoCommit: false</code>); commit offsets manually only after the DB transaction succeeds.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/messaging/idempotent-consumer.ts</code> — reused across every consumer</p>
+      <h4>Database changes</h4>
+      <p class="mono">ProcessedEvent: id, eventId, consumerName, processedAt; unique(eventId, consumerName)</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p>No new topics; existing consumers (job-status, execution's requested-consumer) wrapped with the idempotency helper.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Duplicate-event test: publish the same <code>eventId</code> twice, assert exactly one state change</li>
+        <li>Concurrency test: two consumer processes racing on the same <code>eventId</code> against the real unique constraint (not a mock)</li>
+        <li>Consumer-restart test: crash mid-batch before offset commit, restart, assert safe no-op reprocessing</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>Replaying an entire topic from offset 0 against a populated database produces zero duplicate side effects.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Check-then-insert as two separate statements without relying on the constraint — not atomic under concurrency</li>
+        <li>Committing the Kafka offset before the DB transaction commits — reintroduces exactly the risk this milestone removes</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> retry/backoff routing (<a href="#m11">M11</a>) — a failing handler right now just lets the offset stay uncommitted for default redelivery; no DLQ yet.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(messaging): add ProcessedEvent model and idempotent-consumer wrapper</code></li>
+        <li><code>refactor: wrap job-status and execution consumers with idempotency</code></li>
+        <li><code>test: add duplicate-event and consumer-restart tests</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m11">
+    <summary><span class="num">11</span><span class="title">Retry strategy and dead-letter topics<span class="obj">Bounded retries with backoff, poison-message handling, and a timeout watchdog.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Tiered retry topics <code class="mono">jobs.retry-1/2/3</code>, each with its own delay (e.g. 30s / 5m / 30m) via a <code>notBefore</code> envelope field</li>
+        <li>Exhaustion routes to <code>jobs.dead-letter</code> with full failure history; job-status consumer maps this to <span class="state-chip st-DEAD_LETTERED">DEAD_LETTERED</span></li>
+        <li>Timeout watchdog: polls <span class="state-chip st-RUNNING">RUNNING</span> jobs past <code>startedAt + timeout</code>, marks failed with reason <code>timeout</code>, routes through the same retry pipeline</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Separate topics per tier (rather than one retry topic with encoded delay) surface backlog-per-tier in monitoring — a job stuck at tier 3 is a different signal than one at tier 1 — and let each tier use a different delay cheaply. A single delayed topic + scheduler is a legitimate alternative only worth the extra complexity at much higher retry volume; not needed here.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>modules/execution/infrastructure/retry-router.ts</code>, retry-tier consumers, <code>modules/jobs/infrastructure/dead-letter.consumer.ts</code>, a timeout watchdog module</p>
+      <h4>Database changes</h4><p>Optional: <code>Job.lastFailureReason</code>.</p>
+      <h4>Kafka topics &amp; events</h4>
+      <p><code class="mono">jobs.retry-1/2/3</code> and <code class="mono">jobs.dead-letter</code> (already created in <a href="#m2">M2</a>) now actually used.</p>
+      <h4>Tests</h4>
+      <ul>
+        <li>Retry-tier progression test: fail N times, assert progression through tiers, land in dead-letter on exhaustion</li>
+        <li>Poison-message test: a malformed payload lands in the DLQ without crashing the consumer or blocking the partition</li>
+        <li>Timeout test: a RUNNING job past its deadline transitions to FAILED and enters retry</li>
+      </ul>
+      <h4>Completion criteria</h4>
+      <p>A handler that always throws ends up <span class="state-chip st-DEAD_LETTERED">DEAD_LETTERED</span> after exactly <code>maxAttempts</code>, with each attempt visible in logs; a malformed message never blocks the partition.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Unbounded retry — a self-inflicted outage</li>
+        <li>Treating every failure as retryable — validation failures on payload shape should go straight to dead-letter, not consume retry budget</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> DLQ replay tooling in a UI (a dashboard feature, <a href="#m16">M16</a> at earliest).</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(execution): add tiered retry topics and backoff routing</code></li>
+        <li><code>feat(jobs): add dead-letter consumer and DEAD_LETTERED status</code></li>
+        <li><code>feat: add job timeout watchdog</code></li>
+        <li><code>test: add retry exhaustion, poison-message, and timeout tests</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m12">
+    <summary><span class="num">12</span><span class="title">Cancellation and manual retry<span class="obj">POST /:id/cancel and /:id/retry, both enforcing the state machine.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Cancel: immediate from <span class="state-chip st-PENDING">PENDING</span>/<span class="state-chip st-QUEUED">QUEUED</span> (transition + consumer checks status-before-dispatch); cooperative from <span class="state-chip st-RUNNING">RUNNING</span> via a polled <code>cancelRequested</code> flag</li>
+        <li>Manual retry from <span class="state-chip st-FAILED">FAILED</span>/<span class="state-chip st-DEAD_LETTERED">DEAD_LETTERED</span> — inserts a fresh outbox <code>JobRequested</code>, does not replay the old Kafka message</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Real cancellation of in-flight work requires a cooperative handler that polls a flag between "ticks" — document this as a known limitation of simulated/long-running work, not a bug. Manual retry (user-initiated) and automatic retry-topic routing (<a href="#m11">M11</a>) are conceptually distinct even though both increment <code>attempt</code> — keep them that way in code.</p>
+      <h4>Files &amp; folders</h4>
+      <p>Routes + service methods in <code>modules/jobs/api</code> and <code>application</code></p>
+      <h4>Database changes</h4><p>Optional: <code>Job.cancelRequested</code> (boolean) for cooperative RUNNING cancellation.</p>
+      <h4>Kafka topics &amp; events</h4><p>Retry re-publishes <code>JobRequested</code> via the outbox — same path as original creation.</p>
+      <h4>Tests</h4>
+      <p>State-transition tests for cancel from each legal/illegal source state; retry from DEAD_LETTERED eventually reaching SUCCEEDED given a now-passing handler.</p>
+      <h4>Completion criteria</h4>
+      <p>Illegal transitions (e.g. cancel on a terminal state) are rejected with a domain error, not silently no-op'd.</p>
+      <h4>Common mistakes</h4>
+      <p>Allowing cancel from any terminal state — must be rejected explicitly.</p>
+      <div class="not-yet"><b>Not yet:</b> bulk retry/cancel endpoints.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(jobs): add POST /:id/cancel with cooperative cancellation</code></li>
+        <li><code>feat(jobs): add POST /:id/retry for FAILED and DEAD_LETTERED jobs</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="phase-label">Phase 4 — Observability &amp; Testing</div>
+
+  <details class="milestone" id="m13">
+    <summary><span class="num">13</span><span class="title">Structured logging and correlation IDs<span class="obj">One correlationId traceable from HTTP request through every Kafka hop.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Pino everywhere; Fastify request-id (or generated <code>correlationId</code>) attached as a child logger</li>
+        <li><code>correlationId</code> already exists in the envelope (<a href="#m6">M6</a>) — now consistently propagated; consumers create a per-message child logger from it</li>
+        <li><code>causationId</code> set to the triggering event's <code>eventId</code> (e.g. <code>JobCompleted.causationId = JobStarted.eventId</code>), building a traceable causation chain without full distributed tracing</li>
+      </ul>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/shared/logger.ts</code>, a Fastify correlation plugin, messaging wrapper updated to log correlation fields automatically</p>
+      <h4>Database changes</h4><p>None (<code>Job.correlationId</code> existed since <a href="#m4">M4</a>, now populated everywhere).</p>
+      <h4>Kafka topics &amp; events</h4><p>No new topics; envelope fields now consistently populated.</p>
+      <h4>Tests</h4>
+      <p>A test asserting one <code>correlationId</code> appears in the HTTP access log, the outbox row, and every consumer's log line for one job's lifecycle (via pino's test transport).</p>
+      <h4>Completion criteria</h4>
+      <p>Given one <code>jobId</code>, grepping logs by its correlationId reconstructs the entire lifecycle in order.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>Generating a new correlationId per Kafka hop instead of propagating the original</li>
+        <li>Logging full payloads at info level — log shape and IDs, not potentially sensitive job data</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> OpenTelemetry distributed tracing — correlation-ID log correlation is the deliberately simpler substitute for this project's scope.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(observability): add pino structured logging with request correlation</code></li>
+        <li><code>feat(observability): propagate correlationId/causationId through events and consumers</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m14">
+    <summary><span class="num">14</span><span class="title">Metrics and Grafana<span class="obj">Prometheus metrics for the signals that actually matter here.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>GET /metrics</code> via prom-client: <code>job_duration_seconds</code> (histogram, by type+outcome), <code>jobs_total</code> (counter, by status), <code>retry_total</code> (by tier), <code>dead_letter_total</code>, <code>outbox_backlog</code> (gauge)</li>
+        <li>docker-compose additions: Prometheus + Grafana with a provisioned, checked-in dashboard JSON</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>Instrumentation lives in <code>src/shared/metrics.ts</code>, applied at application-service boundaries so the same instrumentation survives the later service extraction unchanged.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>src/shared/metrics.ts</code>, <code>infrastructure/grafana/dashboards/*.json</code>, <code>infrastructure/prometheus/prometheus.yml</code></p>
+      <h4>Database changes</h4><p>None.</p>
+      <h4>Kafka topics &amp; events</h4><p>None new.</p>
+      <h4>Tests</h4>
+      <p>Metrics endpoint smoke test; a test that completing a job increments <code>jobs_total{status="succeeded"}</code>.</p>
+      <h4>Completion criteria</h4>
+      <p>Grafana shows live throughput, duration percentiles, retry/DLQ counts, and outbox backlog while a load script runs.</p>
+      <h4>Common mistakes</h4>
+      <p>Unbounded label cardinality (never label by <code>jobId</code> — use type/status only); polling outbox backlog too aggressively, adding load to the exact table under stress.</p>
+      <div class="not-yet"><b>Not yet:</b> alerting rules / PagerDuty-style integration.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(observability): add prometheus metrics endpoint and core counters/histograms</code></li>
+        <li><code>infra: add prometheus + grafana to docker-compose with provisioned dashboard</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m15">
+    <summary><span class="num">15</span><span class="title">Testcontainers integration tests<span class="obj">Hermetic CI — no manually-running docker-compose required.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li><code>tests/integration/setup.ts</code>: Testcontainers Postgres + Kafka, Prisma migrations applied against the ephemeral DB, clean teardown</li>
+        <li>Existing integration tests from earlier milestones migrated off the shared dev compose stack</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>CI now runs true integration tests on every push, hermetically. This unlocks two new test categories: a rebalance test (two consumer instances, kill one mid-processing, assert clean pickup with no duplicate side effects) and a graceful-shutdown test (SIGTERM mid in-flight message, assert offset not committed, message reprocessed on restart).</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>tests/integration/setup.ts</code>, <code>tests/integration/containers.ts</code></p>
+      <h4>Tests</h4>
+      <p>Consumer-rebalance test; graceful-shutdown test; migrated M9–M12 suites now running against Testcontainers.</p>
+      <h4>Completion criteria</h4>
+      <p><code>npm run test:integration</code> passes on a fresh clone with zero pre-running external dependencies.</p>
+      <h4>Common mistakes</h4>
+      <ul>
+        <li>One shared container for the entire suite causing cross-test pollution — tests must clean their own rows</li>
+        <li>Booting fresh containers per test file when a shared-per-run container would suffice — balance isolation against suite speed</li>
+      </ul>
+      <div class="not-yet"><b>Not yet:</b> a full CI matrix across OS/Node versions — a single Linux/Node LTS target is sufficient here.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>test: migrate integration tests to Testcontainers</code></li>
+        <li><code>test: add rebalance and graceful-shutdown tests</code></li>
+        <li><code>ci: run integration tests in pipeline</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m16">
+    <summary><span class="num">16</span><span class="title">Operational dashboard<span class="obj">React + TS, read-only job list/detail against the existing REST API.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <ul>
+        <li>Job list with status filter/pagination; job detail with timeline (timestamps, attempt count, error); retry/cancel buttons wired to existing endpoints</li>
+      </ul>
+      <h4>Architectural decisions</h4>
+      <p>The dashboard is a separate app from day one — a client of the API, never importing server code, never touching the DB or Kafka directly.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>dashboard/</code> (Vite + React + TS), <code>dashboard/src/api/client.ts</code>, <code>dashboard/src/pages/JobList.tsx</code>, <code>dashboard/src/pages/JobDetail.tsx</code></p>
+      <h4>Database changes</h4><p>Index on <code>Job.status</code> for filtering.</p>
+      <h4>Kafka topics &amp; events</h4><p>None — dashboard only talks HTTP.</p>
+      <h4>Tests</h4>
+      <p>Component tests (React Testing Library) with a mocked API client; optional single browser-level smoke test.</p>
+      <h4>Completion criteria</h4>
+      <p>Watching a submitted job move PENDING→RUNNING→SUCCEEDED in the UI via polling (WebSocket/SSE push is an explicit stretch goal, not required).</p>
+      <h4>Common mistakes</h4>
+      <p>Giving the dashboard direct DB or Kafka access "for speed" — breaks the boundary; it must go through the API like any other client.</p>
+      <div class="not-yet"><b>Not yet:</b> auth/RBAC (explicitly omitted, not forgotten); real-time push.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(dashboard): scaffold React+TS ops dashboard</code></li>
+        <li><code>feat(dashboard): add job list and detail views</code></li>
+        <li><code>feat(dashboard): wire retry/cancel actions</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="phase-label">Phase 5 — Extraction</div>
+
+  <details class="milestone" id="m17">
+    <summary><span class="num">17</span><span class="title">Modular-boundary validation<span class="obj">A checkpoint, not a feature — prove the boundary before cutting a real service.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Tighten dependency-cruiser/eslint-boundaries from warn to error (if not already); generate a dependency graph and visually confirm <code>execution/</code> has zero imports from <code>jobs/</code> internals.</p>
+      <h4>Architectural decisions</h4>
+      <p>Audit that every cross-module interaction goes through Kafka events or a module's <code>api/</code> surface — never direct calls into another module's <code>application</code>/<code>domain</code>.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>scripts/check-boundaries.sh</code>, a committed graph image in <code>docs/</code></p>
+      <h4>Tests</h4>
+      <p>CI-enforced boundary check (likely already existing since <a href="#m1">M1</a>), re-verified and documented here.</p>
+      <h4>Completion criteria</h4>
+      <p>The dependency graph shows execution reachable from jobs only via contracts/messaging — the green light to proceed to <a href="#m18">M18</a>.</p>
+      <h4>Common mistakes</h4>
+      <p>Discovering a "convenience" direct call at this point — fix it now; it's a straightforward refactor here and a rewrite once split into a deployable.</p>
+      <div class="not-yet"><b>Not yet:</b> nothing new — this is a gate.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>chore: tighten module boundary rules to error-level</code></li>
+        <li><code>docs: add dependency graph and boundary audit notes</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m18">
+    <summary><span class="num">18</span><span class="title">Execution-service extraction<span class="obj">The first cut — execution becomes an independent, Kafka-only deployable.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Move <code>modules/execution/</code> into <code>apps/execution-service</code> with its own <code>package.json</code>/Dockerfile; the monorepo restructure (<code>apps/</code> + <code>packages/</code>) happens here because independence requires it.</p>
+      <h4>Architectural decisions</h4>
+      <p><code>src/contracts</code> (isolated since <a href="#m6">M6</a>) moves to <code>packages/event-contracts</code> unchanged — the payoff of building it early. Execution-service gets its own Prisma schema/database (<a href="#m19">M19</a>) — no more sharing the monolith's Postgres. The remaining monolith ("job-api") drops the execution folder entirely; its status consumer now listens across a real network boundary, and the code barely changes because it was already Kafka-only.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>apps/job-api/</code> (former monolith, minus execution), <code>apps/execution-service/</code>, <code>packages/event-contracts/</code>, <code>packages/kafka-client/</code>, root workspace config, updated root <code>docker-compose.yml</code></p>
+      <h4>Database changes</h4><p>Execution-service provisioned with a new database (schema detail in <a href="#m19">M19</a>).</p>
+      <h4>Kafka topics &amp; events</h4><p>Unchanged — proof that clean event boundaries make extraction a deployment change, not a redesign.</p>
+      <h4>Tests</h4>
+      <p>Re-run the exact end-to-end lifecycle test from <a href="#m8">M8</a>/<a href="#m15">M15</a> unmodified, now against two separate processes — passing without modification is the strongest evidence the boundary was real.</p>
+      <h4>Completion criteria</h4>
+      <p><code>docker compose up</code> starts two independent Node processes with two Postgres databases; execution-service can restart independently without job-api restarting.</p>
+      <h4>Common mistakes</h4>
+      <p>Leaving a "temporary" direct DB connection from execution-service into job-api's database — don't; a missing event field is the actual signal, not a reason to share a connection string.</p>
+      <div class="not-yet"><b>Not yet:</b> notification/audit extraction (<a href="#m21">M21</a>/<a href="#m22">M22</a>); Kubernetes, service discovery, or a service mesh — two Compose services with static hostnames is the correct scope.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>chore: restructure repo into apps/ and packages/ workspaces</code></li>
+        <li><code>refactor: extract execution module into apps/execution-service</code></li>
+        <li><code>chore: give execution-service its own database and docker-compose service</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m19">
+    <summary><span class="num">19</span><span class="title">Separate service databases<span class="obj">Execution-service's own schema — no shared tables, no shared Prisma client.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Independent <code>ExecutionAttempt</code> table tracking attempt history, handler used, duration, and outcome — execution-service's own local source of truth, distinct from job-api's <code>Job.status</code> projection.</p>
+      <h4>Architectural decisions</h4>
+      <p><code>jobId</code> is referenced only by value (a plain string) — no actual foreign key across databases, since there is no cross-database FK.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>apps/execution-service/prisma/schema.prisma</code> — its own independent migration history</p>
+      <h4>Database changes</h4>
+      <p class="mono">New database execution_service_db. ExecutionAttempt: id, jobId, attemptNumber, handlerType, status, startedAt, finishedAt, error</p>
+      <h4>Kafka topics &amp; events</h4><p>No new topics; execution-service publishes exactly as before, now sourced from its own attempt records.</p>
+      <h4>Tests</h4>
+      <p>Execution-service repository tests against its own Testcontainers Postgres instance, fully independent of job-api's suite.</p>
+      <h4>Completion criteria</h4>
+      <p>Grepping execution-service's codebase for any job-api connection string or shared Prisma client returns nothing; each service's migrations run independently.</p>
+      <h4>Common mistakes</h4>
+      <p>Sharing a Prisma schema file or generated client "to avoid duplication" — recreates coupling through a side door. Duplicating simple types via event-contracts (not Prisma models) is the correct trade.</p>
+      <div class="not-yet"><b>Not yet:</b> cross-service queries or joins of any kind — the dashboard composes client-side across both APIs if it needs data from both.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(execution-service): add independent Prisma schema and ExecutionAttempt model</code></li>
+        <li><code>test(execution-service): add repository tests against isolated database</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m20">
+    <summary><span class="num">20</span><span class="title">Eventual-consistency handling<span class="obj">Job-api's status is honestly a projection, possibly stale, never wrong.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Job-api's <code>Job.status</code> is formally understood as a read model kept current by consuming execution-service's events, lagging by however long Kafka delivery and processing take.</p>
+      <h4>Architectural decisions</h4>
+      <p><code>GET /api/jobs/:id</code> stays honest about this: accurate <code>updatedAt</code> timestamps so clients can reason about staleness, rather than pretending the projection is instantaneous.</p>
+      <h4>Files &amp; folders</h4>
+      <p>Minor API response shape decisions in job-api's jobs module; mostly documentation.</p>
+      <h4>Database changes</h4><p>Optional: <code>lastProjectedEventAt</code> for transparency.</p>
+      <h4>Kafka topics &amp; events</h4><p>None new — this milestone is about correctly reasoning about consequences of <a href="#m18">M18</a>, not new plumbing.</p>
+      <h4>Tests</h4>
+      <p>Deliberately pause the execution-service consumer and assert job-api's GET response stays self-consistent while stale (e.g. RUNNING with an old <code>updatedAt</code>, never a fabricated newer status).</p>
+      <h4>Completion criteria</h4>
+      <p>You can articulate and demonstrate exactly what a client observes during the propagation window: accurate but possibly stale, never wrong.</p>
+      <h4>Common mistakes</h4>
+      <p>Faking synchronous consistency with a request-response call from job-api into execution-service "to get the real status" — defeats the point of the extraction and reintroduces synchronous coupling.</p>
+      <div class="not-yet"><b>Not yet:</b> saga/process-manager patterns or distributed transactions — the projection pattern is sufficient at this scope.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>docs: document eventual-consistency model for job-api projection</code></li>
+        <li><code>test: add projection-staleness consistency test</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m21">
+    <summary><span class="num">21</span><span class="title">Notification-service extraction<span class="obj">The same pattern, applied a second time — this should feel like a checklist rerun.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Notifications module (build minimally now if not already present: consumes <code>jobs.completed</code>/<code>failed</code>, logs a fake send, records a <code>NotificationLog</code>) — then extracted the same way execution was.</p>
+      <h4>Architectural decisions</h4>
+      <p>Same as <a href="#m18">M18</a>/<a href="#m19">M19</a>: own database, own service, Kafka-only communication, no shared Prisma client.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>apps/notification-service/</code></p>
+      <h4>Database changes</h4>
+      <p class="mono">NotificationLog: id, jobId, channel, status, sentAt — own database</p>
+      <h4>Kafka topics &amp; events</h4><p>Consumes <code>jobs.completed</code>/<code>jobs.failed</code>; no new topics required.</p>
+      <h4>Tests</h4>
+      <p>Idempotent consumption test — a real send-side effect must not double-fire on redelivery, a good demonstration that idempotency matters beyond DB state; repository tests; extraction smoke test.</p>
+      <h4>Completion criteria</h4>
+      <p>Mirrors <a href="#m18">M18</a>/<a href="#m19">M19</a>'s criteria for the notifications module.</p>
+      <h4>Common mistakes</h4>
+      <p>Skipping idempotency because "it's just a log line" — if this were real email/SMS, duplicate sends are user-visible and costly; treat it with the same rigor to keep the demonstration honest.</p>
+      <div class="not-yet"><b>Not yet:</b> a real email/SMS provider — a fake/logged channel is appropriate at this scope.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(notifications): implement notification module in monolith</code></li>
+        <li><code>refactor: extract notification module into apps/notification-service</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m22">
+    <summary><span class="num">22</span><span class="title">Audit-service extraction<span class="obj">A third repetition — the fastest one, and worth noting why in your README.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>Audit module consumes essentially every domain event and appends an immutable <code>AuditLogEntry</code> — a natural fit for a high-volume, append-only consumer.</p>
+      <h4>Database changes</h4>
+      <p class="mono">AuditLogEntry: id, aggregateType, aggregateId, eventType, payload (jsonb), occurredAt, recordedAt — own database, append-only</p>
+      <h4>Kafka topics &amp; events</h4><p>Consumes the full event set; publishes nothing — a pure sink, a useful contrast against notification-service (sink) and execution-service (source+sink).</p>
+      <h4>Tests</h4>
+      <p>Idempotent append test: duplicate event → still exactly one audit row per <code>eventId</code>, enforced by its own <code>ProcessedEvent</code> unique constraint.</p>
+      <h4>Completion criteria</h4>
+      <p>Mirrors prior extractions; a full job lifecycle can be reconstructed purely from <code>AuditLogEntry</code> rows.</p>
+      <h4>Common mistakes</h4>
+      <p>Making audit-service "the one true event log" that other services read from — resist; Kafka retention and your own topics are the actual event log, audit-service is just one consumer's durable copy of it.</p>
+      <div class="not-yet"><b>Not yet:</b> an audit UI/search view (a possible dashboard extension, optional stretch).</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>feat(audit): implement audit module in monolith</code></li>
+        <li><code>refactor: extract audit module into apps/audit-service</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="phase-label">Phase 6 — Capstone</div>
+
+  <details class="milestone" id="m23">
+    <summary><span class="num">23</span><span class="title">Load testing and performance analysis<span class="obj">Quantify behavior under load; find what breaks first, and why.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>A load-generation script (k6 or autocannon) against <code>POST /api/jobs</code> at increasing rates; Grafana captures at baseline, moderate, and saturation load; a short written analysis of the first bottleneck (likely outbox poll interval, DB pool size, or too few partitions creating a hot key).</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>scripts/load/</code> (k6 scripts), <code>docs/performance/results.md</code></p>
+      <h4>Tests</h4>
+      <p>Not unit/integration tests — the output here is data and analysis, captured with enough methodology detail to be reproducible.</p>
+      <h4>Completion criteria</h4>
+      <p>A documented answer to "what breaks first, and why," with at least one measured tuning change and its measured effect.</p>
+      <h4>Common mistakes</h4>
+      <p>Load-testing against a laptop-scale Compose stack and drawing production-scale conclusions — be explicit in the write-up about the test environment's limits.</p>
+      <div class="not-yet"><b>Not yet:</b> production-scale infrastructure, autoscaling, or a multi-broker Kafka cluster — single-node is the honest and sufficient scope.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>chore: add k6 load-testing scripts</code></li>
+        <li><code>docs: add performance analysis and tuning notes</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="milestone" id="m24">
+    <summary><span class="num">24</span><span class="title">Deployment and CI/CD<span class="obj">Build, test, and (optionally) deploy the full multi-service system.</span></span></summary>
+    <div class="m-body">
+      <h4>Features</h4>
+      <p>GitHub Actions per app, path-filtered so an execution-service change doesn't rebuild job-api unnecessarily; Docker image builds per service; an optional single-host deploy target (Fly.io/Render, or a well-documented <code>docker-compose up</code> — genuinely defensible on its own for a portfolio piece).</p>
+      <h4>Architectural decisions</h4>
+      <p>Deployment target stays modest and honest — explicitly not Kubernetes. Say why directly in the README: at this scale, k8s would be resume-keyword-driven complexity rather than a real requirement, and naming that trade-off is itself a sign of judgment.</p>
+      <h4>Files &amp; folders</h4>
+      <p><code>.github/workflows/</code> per app, Dockerfiles per app, optional <code>infrastructure/docker-compose.prod.yml</code></p>
+      <h4>Tests</h4>
+      <p>CI runs the full unit/integration/e2e suite from earlier milestones as the deployment gate — no new test types needed.</p>
+      <h4>Completion criteria</h4>
+      <p>A green CI run on main builds all service images; optionally, a live URL where dashboard + APIs are reachable.</p>
+      <h4>Common mistakes</h4>
+      <p>Introducing Kubernetes/Helm/a service mesh for a single-user portfolio deployment — avoid, and say why in the README rather than silently omitting it.</p>
+      <div class="not-yet"><b>Not yet:</b> nothing further planned — this is the final milestone.</div>
+      <h4>Git commits</h4>
+      <ul class="commits">
+        <li><code>ci: add per-service GitHub Actions build/test workflows</code></li>
+        <li><code>chore: add production Dockerfiles</code></li>
+        <li><code>docs: finalize README with architecture and setup instructions</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <hr class="rule">
+
+  <h2 id="final-architecture">Final Architecture</h2>
+  <pre class="mermaid">
+flowchart LR
+  subgraph Client
+    UI[React Dashboard]
+    API_CLIENT[API Consumers]
+  end
+
+  subgraph JobAPI[job-api service]
+    REST[Fastify REST API]
+    OUTBOX[Outbox Publisher]
+    STATUS[Status Consumer]
+    JOBDB[(job-api Postgres)]
+  end
+
+  subgraph ExecSvc[execution-service]
+    EXEC[Handler Registry]
+    RETRY[Retry Router]
+    EXECDB[(execution Postgres)]
+  end
+
+  subgraph NotifSvc[notification-service]
+    NOTIFY[Notifier]
+    NOTIFYDB[(notification Postgres)]
+  end
+
+  subgraph AuditSvc[audit-service]
+    AUDIT[Audit Sink]
+    AUDITDB[(audit Postgres)]
+  end
+
+  KAFKA{{Kafka}}
+
+  UI --> REST
+  API_CLIENT --> REST
+  REST --> JOBDB
+  REST --> OUTBOX
+  OUTBOX -- jobs.requested --> KAFKA
+  KAFKA -- jobs.requested --> EXEC
+  EXEC --> EXECDB
+  EXEC -- jobs.started/completed/failed --> KAFKA
+  KAFKA -- retry tiers --> RETRY
+  RETRY -- jobs.dead-letter --> KAFKA
+  KAFKA -- lifecycle events --> STATUS
+  STATUS --> JOBDB
+  KAFKA -- completed/failed --> NOTIFY
+  NOTIFY --> NOTIFYDB
+  KAFKA -- all events --> AUDIT
+  AUDIT --> AUDITDB
+
+  PROM[Prometheus] -.scrapes.-> JobAPI
+  PROM -.scrapes.-> ExecSvc
+  PROM --> GRAF[Grafana]
+  </pre>
+
+  <h2 id="concepts">Engineering Concepts Demonstrated</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h4>Distributed systems</h4>
+      <ul>
+        <li>Event-driven architecture, at-least-once delivery</li>
+        <li>Idempotent consumption, eventual consistency</li>
+        <li>Partitioning &amp; ordering guarantees via message keys</li>
+        <li>Consumer rebalancing, graceful shutdown</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Reliability patterns</h4>
+      <ul>
+        <li>Transactional outbox, optimistic concurrency</li>
+        <li>Tiered retry with backoff, dead-letter handling</li>
+        <li>Poison-message isolation, timeout watchdogs</li>
+        <li>Duplicate submission protection</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Architecture &amp; design</h4>
+      <ul>
+        <li>Modular monolith with enforced module boundaries</li>
+        <li>Domain-driven state machines, ports &amp; adapters</li>
+        <li>Incremental service extraction without a rewrite</li>
+        <li>Database-per-service, no shared schemas</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Operations</h4>
+      <ul>
+        <li>Structured logging with correlation/causation IDs</li>
+        <li>Prometheus metrics, Grafana dashboards</li>
+        <li>Testcontainers-based hermetic integration testing</li>
+        <li>Load testing and bottleneck analysis</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="readme">Suggested README Sections</h2>
+  <ul>
+    <li>Overview &amp; problem statement</li>
+    <li>Architecture diagram (monolith, then post-extraction)</li>
+    <li>Quickstart (<code>docker compose up</code>, seed a job)</li>
+    <li>API reference</li>
+    <li>Event catalog (topics, event types, envelope)</li>
+    <li>Design decisions &amp; trade-offs (link this roadmap)</li>
+    <li>Testing strategy</li>
+    <li>Observability (metrics, dashboards, log correlation)</li>
+    <li>The extraction story — how and why modules became services</li>
+    <li>Known limitations (explicitly, not silently)</li>
+    <li>What's next / stretch goals</li>
+  </ul>
+
+  <h2 id="resume">Suggested Résumé Bullets</h2>
+  <ul>
+    <li>Designed and built a Kafka-based distributed job processing platform in TypeScript, evolving a modular monolith into three independently deployable microservices without a rewrite, by enforcing module boundaries from day one.</li>
+    <li>Implemented a transactional outbox and idempotent consumer pipeline guaranteeing at-least-once event delivery with zero duplicate side effects, verified by crash-recovery and concurrency tests against real Postgres and Kafka via Testcontainers.</li>
+    <li>Built a tiered retry and dead-letter system with backoff and poison-message isolation, reducing unbounded-failure risk and providing per-tier operational visibility via Prometheus/Grafana.</li>
+    <li>Extracted a job-execution service communicating purely through Kafka events with a database-per-service model, documenting and testing the resulting eventual-consistency behavior at the API layer.</li>
+    <li>Instrumented the system end-to-end with correlation-ID log tracing and Prometheus metrics, enabling full request-to-completion traceability across service boundaries.</li>
+  </ul>
+
+  <h2 id="interview">Interview Questions You Should Be Able to Answer</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h4>Kafka &amp; reliability</h4>
+      <ul>
+        <li>How do you guarantee at-least-once delivery, and why not exactly-once?</li>
+        <li>Walk through the outbox pattern's remaining duplicate-publication window.</li>
+        <li>How does a unique DB constraint make idempotent consumption race-safe?</li>
+        <li>Why commit Kafka offsets after the DB transaction, not before?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Architecture &amp; boundaries</h4>
+      <ul>
+        <li>What made the execution-service extraction a deployment change, not a rewrite?</li>
+        <li>Why should shared packages hold contracts and utilities, never repositories?</li>
+        <li>How do you prevent a distributed monolith when splitting services?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Data &amp; consistency</h4>
+      <ul>
+        <li>How does job-api represent a job whose execution status hasn't propagated yet?</li>
+        <li>Why is Postgres authoritative for state while Kafka only transports events?</li>
+        <li>How does optimistic concurrency prevent lost updates?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Testing &amp; operations</h4>
+      <ul>
+        <li>Why avoid mocking Kafka/Postgres in integration tests?</li>
+        <li>What does a consumer-rebalance test actually prove?</li>
+        <li>What broke first under load, and what did you change in response?</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="scope">Scope Definitions</h2>
+  <div class="final-defs">
+    <div class="card">
+      <h4>Minimum viable version</h4>
+      <p>Milestones 1–12. A working modular monolith: REST API, Postgres persistence, transactional outbox, idempotent Kafka consumers, tiered retry with dead-lettering, and cancel/manual-retry — no extraction, no dashboard, minimal observability. This alone demonstrates every core reliability pattern.</p>
+    </div>
+    <div class="card full">
+      <h4>Fully developed portfolio version</h4>
+      <p>All 24 milestones. Three services extracted from the monolith with database-per-service and documented eventual consistency, full observability stack, hermetic Testcontainers CI, a React ops dashboard, a load-test writeup, and a CI/CD pipeline — deliberately stopping short of Kubernetes.</p>
+    </div>
+  </div>
+
+  <p class="footer-note">EventForge — a portfolio roadmap. Milestones are designed to be implemented and committed independently; each states explicitly what not to build yet.</p>
+
+</div>
