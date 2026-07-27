@@ -1,8 +1,8 @@
 import { Prisma, type PrismaClient, type PrismaJobRow } from '@/db/prisma-client';
 
-import { JobVersionConflictError } from '../domain/errors';
+import { DuplicateJobSubmissionError, JobVersionConflictError } from '../domain/errors';
 import { Job, type JobProps } from '../domain/job.entity';
-import type { JobRepository } from '../domain/job-repository.port';
+import type { JobListFilter, JobRepository } from '../domain/job-repository.port';
 
 function toProps(row: PrismaJobRow): JobProps {
   return {
@@ -53,15 +53,43 @@ export class PrismaJobRepository implements JobRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async create(job: Job): Promise<Job> {
-    const row = await this.prisma.job.create({ data: toCreateInput(job.props) });
+    try {
+      const row = await this.prisma.job.create({ data: toCreateInput(job.props) });
 
-    return Job.fromProps(toProps(row));
+      return Job.fromProps(toProps(row));
+    } catch (error) {
+      // P2002 = unique constraint violation. idempotencyKey is currently the
+      // only unique column besides the primary key, so this is unambiguous;
+      // revisit this check if a second unique constraint is ever added.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && job.props.idempotencyKey) {
+        throw new DuplicateJobSubmissionError(job.props.idempotencyKey);
+      }
+
+      throw error;
+    }
   }
 
   async findById(id: string): Promise<Job | null> {
     const row = await this.prisma.job.findUnique({ where: { id } });
 
     return row ? Job.fromProps(toProps(row)) : null;
+  }
+
+  async findByIdempotencyKey(idempotencyKey: string): Promise<Job | null> {
+    const row = await this.prisma.job.findUnique({ where: { idempotencyKey } });
+
+    return row ? Job.fromProps(toProps(row)) : null;
+  }
+
+  async list(filter: JobListFilter): Promise<Job[]> {
+    const rows = await this.prisma.job.findMany({
+      where: filter.status ? { status: filter.status } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: filter.limit,
+      skip: filter.offset,
+    });
+
+    return rows.map((row) => Job.fromProps(toProps(row)));
   }
 
   async update(job: Job): Promise<Job> {

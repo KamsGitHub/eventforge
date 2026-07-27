@@ -19,3 +19,16 @@ export class JobVersionConflictError extends Error {
     this.name = 'JobVersionConflictError';
   }
 }
+
+/**
+ * Thrown when a job submission's Idempotency-Key collides with an existing
+ * job. This is an HTTP-level duplicate-submission concern, distinct from
+ * Kafka consumer idempotency (Milestone 10) — different mechanism,
+ * different table, don't conflate them.
+ */
+export class DuplicateJobSubmissionError extends Error {
+  constructor(public readonly idempotencyKey: string) {
+    super(`A job with idempotencyKey "${idempotencyKey}" already exists`);
+    this.name = 'DuplicateJobSubmissionError';
+  }
+}
