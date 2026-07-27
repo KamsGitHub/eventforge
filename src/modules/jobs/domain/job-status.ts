@@ -1,0 +1,1 @@
+export type JobStatus = 'PENDING' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'DEAD_LETTERED' | 'CANCELLED';
