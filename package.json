@@ -5,7 +5,7 @@
   "description": "Kafka-based distributed job processing platform (modular monolith -> extracted services)",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20"
+    "node": "^22 || ^24 || >=26"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
