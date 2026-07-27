@@ -1,9 +1,14 @@
 import { buildApp } from '@/app';
 import { loadConfig } from '@/config/env';
+import { JobService } from '@/modules/jobs/application/job.service';
+
+import { InMemoryJobRepository } from './jobs/fakes/in-memory-job.repository';
 
 describe('GET /health', () => {
   it('returns 200 with an ok status', async () => {
-    const app = buildApp(loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: 'postgresql://user:pass@localhost:5432/db' }));
+    const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: 'postgresql://user:pass@localhost:5432/db' });
+    const jobService = new JobService(new InMemoryJobRepository());
+    const app = buildApp({ config, jobService });
 
     const response = await app.inject({ method: 'GET', url: '/health' });
 
