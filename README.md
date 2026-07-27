@@ -2,7 +2,7 @@
 
 A Kafka-based distributed job processing platform, written entirely in TypeScript. It starts as a well-structured modular monolith and is incrementally evolved into independently deployable microservices — demonstrating clean architecture, reliability patterns (transactional outbox, idempotent consumers, retries/DLQ), observability, and testing along the way.
 
-**Status:** early stage. Milestones 1–4 of 24 complete — repo scaffold, local Postgres + Kafka, a running Fastify server, and Prisma-backed Job persistence with a domain state machine and optimistic concurrency. No API routes or Kafka wiring yet; that starts at Milestone 5.
+**Status:** early stage. Milestones 1–5 of 24 complete — repo scaffold, local Postgres + Kafka, a running Fastify server, Prisma-backed Job persistence, and a working `POST/GET /api/jobs` API with duplicate-submission protection. No Kafka wiring yet — jobs created via the API stay `PENDING` forever for now; that starts at Milestone 6.
 
 The full build plan — every milestone's objective, architecture decisions, database/Kafka changes, tests, and completion criteria — lives in [`docs/roadmap.html`](docs/roadmap.html) (open it in a browser).
 
@@ -25,7 +25,9 @@ src/
 ├── shared/             # cross-cutting technical utilities only — no business logic
 └── modules/
     ├── jobs/            # job management: API, state machine, persistence
-    │   ├── domain/       # Job entity + transitionTo() state machine, JobRepository port, domain errors
+    │   ├── api/           # Fastify routes + zod request/response schemas
+    │   ├── application/   # JobService — orchestrates domain + repository
+    │   ├── domain/        # Job entity + transitionTo() state machine, JobRepository port, domain errors
     │   └── infrastructure/  # PrismaJobRepository — the only file here allowed to import the Prisma client
     ├── execution/       # job execution: handler registry, Kafka consumers
     ├── notifications/   # job-completion notifications
@@ -35,6 +37,16 @@ src/
 `prisma/schema.prisma` defines the `Job` model (state, payload/result as JSONB, optimistic-concurrency `version` column, unique `idempotencyKey`). Migrations live in `prisma/migrations/`; the generated client is emitted to `generated/prisma/` (gitignored — run `npx prisma generate` after cloning).
 
 Each module owns its own `api → application → domain → infrastructure` slice. A module may only be reached through its `api/` folder or through Kafka events — never by reaching into another module's `application`, `domain`, or `infrastructure` layers directly. This boundary is enforced by [`dependency-cruiser`](.dependency-cruiser.cjs), not just convention: `npm run boundaries` fails the build on a violation.
+
+## API
+
+```
+POST   /api/jobs              create a job
+GET    /api/jobs               list jobs (?status=, ?limit=, ?offset=)
+GET    /api/jobs/:jobId        get a job by id
+```
+
+`POST /api/jobs` takes `{ "type": string, "payload": object }` and an optional `Idempotency-Key` header. Replaying the same key returns the original job (same `id`, same `payload`) with `201` again — no second row is created; this is an HTTP-level duplicate-submission guard, distinct from the Kafka consumer idempotency that arrives at Milestone 10. Jobs are created `PENDING` and stay there — nothing consumes them yet, since Kafka isn't wired up until Milestone 6/9. `correlationId` is generated server-side per job; clients don't set it.
 
 ## Getting started
 
