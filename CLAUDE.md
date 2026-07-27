@@ -24,6 +24,12 @@ Run a single test file: `npx jest tests/smoke.test.ts`. Run tests matching a nam
 
 CI (`.github/workflows/ci.yml`) runs lint → typecheck → boundaries → test on every push/PR against `main`, on Node 22. **`npm run boundaries` requires Node ^22||^24||>=26** (a `dependency-cruiser` constraint) — this already broke CI once when the workflow was pinned to Node 20; don't drop the Node version below that.
 
+**`npm test` needs a working Docker daemon** — `tests/integration/postgres.smoke.test.ts` boots a real Postgres container via Testcontainers (no mocking Kafka/Postgres in tests meant to verify integration behavior, per the roadmap).
+
+### Local infrastructure (Milestone 2)
+
+`docker-compose.yml` at the repo root runs Postgres 16 and Kafka (`apache/kafka:4.3.1`, KRaft mode, no ZooKeeper) plus a one-off `kafka-init` job and an optional `kafka-ui`. Bring it up with `docker compose up -d postgres kafka && docker compose up kafka-init`. The 8 topics (`jobs.requested/started/completed/failed`, `jobs.retry-1/2/3`, `jobs.dead-letter`) are created explicitly by `infrastructure/kafka/create-topics.sh` — **never add reliance on broker auto-create**; if a new topic is needed, add it to that script's `TOPICS` array. Nothing in `src/` talks to this stack yet (starts at Milestone 3/4/6) — the compose stack existing does not mean it's wired into the app.
+
 ## Architecture
 
 ### Module boundary rule (the load-bearing constraint)
