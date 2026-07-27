@@ -11,14 +11,15 @@ EventForge: a Kafka-based distributed job processing platform in TypeScript, bui
 ## Commands
 
 ```bash
-npm run dev           # tsx watch src/server.ts — http://localhost:3000/health
-npm run lint          # ESLint (flat config, type-aware)
-npm run typecheck     # tsc --noEmit against tsconfig.json (src + tests)
-npm run boundaries    # dependency-cruiser module-boundary check — see below
-npm test              # Jest (all tests under tests/**/*.test.ts)
-npm run build         # tsc -p tsconfig.build.json -> dist/ (src only, no tests)
-npm start             # node dist/server.js (run npm run build first)
-npm run format        # prettier --check .
+npx prisma generate    # regenerate the Prisma client into generated/ (gitignored; run after clone/schema change)
+npm run dev            # tsx watch src/server.ts — http://localhost:3000/health
+npm run lint           # ESLint (flat config, type-aware)
+npm run typecheck      # tsc --noEmit against tsconfig.json (src + tests + prisma.config.ts)
+npm run boundaries     # dependency-cruiser module-boundary check — see below
+npm test               # Jest (all tests under tests/**/*.test.ts)
+npm run build          # tsc -p tsconfig.build.json, then tsc-alias rewrites @/ aliases in dist/
+npm start              # node dist/src/server.js (run npm run build first)
+npm run format         # prettier --check .
 npm run format:write   # prettier --write .
 ```
 
@@ -26,19 +27,37 @@ Run a single test file: `npx jest tests/smoke.test.ts`. Run tests matching a nam
 
 CI (`.github/workflows/ci.yml`) runs lint → typecheck → boundaries → test on every push/PR against `main`, on Node 22. **`npm run boundaries` requires Node ^22||^24||>=26** (a `dependency-cruiser` constraint) — this already broke CI once when the workflow was pinned to Node 20; don't drop the Node version below that.
 
-**`npm test` needs a working Docker daemon** — `tests/integration/postgres.smoke.test.ts` boots a real Postgres container via Testcontainers (no mocking Kafka/Postgres in tests meant to verify integration behavior, per the roadmap).
+**`npm test` needs a working Docker daemon**: `tests/integration/postgres.smoke.test.ts` and `tests/integration/jobs/prisma-job.repository.test.ts` each boot a real, throwaway Postgres container via Testcontainers (no mocking Kafka/Postgres in tests meant to verify integration behavior, per the roadmap). The `test` script also sets `NODE_OPTIONS=--experimental-vm-modules` (via `cross-env`, for Windows/cross-shell portability) — required by Prisma 7's driver-adapter runtime, not optional; removing it breaks every test that touches a real `PrismaClient` with a cryptic "dynamic import callback was invoked without --experimental-vm-modules" error.
+
+**`@/*` path aliases don't resolve at runtime in compiled output** — `tsc` alone leaves `require('@/app')` in `dist/`, which Node can't resolve. `npm run build` runs `tsc-alias` afterward specifically to rewrite those to relative `require()` paths; don't remove that step or add a new build path that skips it.
 
 ### Local infrastructure (Milestone 2)
 
-`docker-compose.yml` at the repo root runs Postgres 16 and Kafka (`apache/kafka:4.3.1`, KRaft mode, no ZooKeeper) plus a one-off `kafka-init` job and an optional `kafka-ui`. Bring it up with `docker compose up -d postgres kafka && docker compose up kafka-init`. The 8 topics (`jobs.requested/started/completed/failed`, `jobs.retry-1/2/3`, `jobs.dead-letter`) are created explicitly by `infrastructure/kafka/create-topics.sh` — **never add reliance on broker auto-create**; if a new topic is needed, add it to that script's `TOPICS` array. Nothing in `src/` talks to this stack yet (starts at Milestone 4/6) — the compose stack existing does not mean it's wired into the app.
+`docker-compose.yml` at the repo root runs Postgres 16 and Kafka (`apache/kafka:4.3.1`, KRaft mode, no ZooKeeper) plus a one-off `kafka-init` job and an optional `kafka-ui`. Bring it up with `docker compose up -d postgres kafka && docker compose up kafka-init`. The 8 topics (`jobs.requested/started/completed/failed`, `jobs.retry-1/2/3`, `jobs.dead-letter`) are created explicitly by `infrastructure/kafka/create-topics.sh` — **never add reliance on broker auto-create**; if a new topic is needed, add it to that script's `TOPICS` array. Nothing in `src/` talks to Kafka yet (starts at Milestone 6) — the topics existing does not mean they're wired into the app.
 
 ### App vs. server split (Milestone 3)
 
 `src/app.ts` exports `buildApp(config?)`, which builds and returns a Fastify instance — it never calls `.listen()`. This is what lets tests use `app.inject()` without binding a port. `src/server.ts` is the only side-effecting entrypoint: it loads `.env` via `dotenv/config`, calls `buildApp()`, `.listen()`s, and wires `SIGINT`/`SIGTERM` to `app.close()` before `process.exit()`. **Any new route or plugin goes in `app.ts` (or a module's `api/`), never in `server.ts`.**
 
-Config is loaded once via `loadConfig()` in `src/config/env.ts` (zod-validated, defaults for missing vars, throws on invalid ones) and attached to the Fastify instance as `app.config` — modules read `app.config`, they don't call `process.env` directly. Only `NODE_ENV`, `PORT`, and `LOG_LEVEL` are validated so far; extend `envSchema` when a milestone actually starts consuming a new var (e.g. `DATABASE_URL` at Milestone 4), rather than adding it speculatively.
+Config is loaded once via `loadConfig()` in `src/config/env.ts` (zod-validated, defaults for missing vars, throws on invalid ones) and attached to the Fastify instance as `app.config` — modules read `app.config`, they don't call `process.env` directly. `NODE_ENV`, `PORT`, `LOG_LEVEL`, and (since Milestone 4) `DATABASE_URL` are validated; extend `envSchema` when a milestone actually starts consuming a new var (e.g. `KAFKA_BROKERS` at Milestone 6), rather than adding it speculatively.
 
 The pino logger (`src/shared/logger.ts`) is passed into Fastify via the `loggerInstance` option (not `logger` — Fastify 5 uses `loggerInstance` specifically for a pre-built logger instance).
+
+### Prisma / database (Milestone 4)
+
+This project is on **Prisma 7**, which changed enough that assumptions from Prisma 4–6 don't hold:
+
+- **Driver adapters are mandatory.** `datasource.url` in `prisma/schema.prisma` is gone entirely (`url = env(...)` is now a hard schema-validation error) — the connection string lives in `prisma.config.ts` (`datasource.url: process.env['DATABASE_URL']`), and `PrismaClient` requires an `adapter` (we use `@prisma/adapter-pg`'s `PrismaPg`). There is no "classic" no-adapter mode to fall back to.
+- **The generator is `prisma-client` (not `prisma-client-js`)**, outputting real `.ts` source — not a prebuilt package — to `generated/prisma/` (gitignored; run `npx prisma generate` after cloning or changing the schema). We pinned `moduleFormat = "cjs"` in the generator block in `prisma/schema.prisma`; without it, the generator emits ESM (`import.meta.url`), which breaks under our CommonJS/ts-jest setup.
+- **`src/db/prisma-client.ts` vs `src/db/prisma.ts` is a deliberate split, not duplication.** `prisma-client.ts` is side-effect-free: it just re-exports `PrismaClient`, `Prisma`, `PrismaJobRow`, and a `createPrismaClient(url?)` factory. `prisma.ts` is the actual singleton: `export const prisma = createPrismaClient()` runs `loadConfig()` at module load time, which throws without a live `DATABASE_URL`. **Anything that only needs the client type/factory (tests constructing their own client, e.g. against a Testcontainers database) must import from `prisma-client.ts`, not `prisma.ts`** — importing the latter for its types would still eagerly execute the singleton line and crash without `DATABASE_URL` set.
+- Jest's `moduleNameMapper` strips a trailing `.js` from relative imports (`^(\.{1,2}/.*)\.js$`) because the generated client uses NodeNext-style `./foo.js` imports against `.ts` source files with no compiled `.js` on disk — without the mapping, Jest can't resolve them.
+- `.dependency-cruiser.cjs`'s `doNotFollow` excludes `^generated` (alongside `node_modules`) — otherwise the boundary/circular check cruises into the generated client's own internal circular references, which aren't ours to fix.
+
+### Job persistence (Milestone 4)
+
+`modules/jobs/domain/job.entity.ts` is the `Job` aggregate: immutable (`transitionTo()` returns a new `Job`, never mutates), with the state machine's legal transitions as its only enforcement point (throws `IllegalJobStateTransitionError` from `domain/errors.ts` otherwise). `JobStatus` lives in its own `domain/job-status.ts` file specifically to avoid a circular import between `job.entity.ts` and `errors.ts` (both needed the type; extracting it broke the cycle instead of one importing from the other).
+
+`modules/jobs/infrastructure/prisma-job.repository.ts` is **the only file in the jobs module allowed to import the Prisma client** — this is the seam the execution-service extraction (Milestone 18) cuts along. Optimistic concurrency: `update()` does `updateMany({ where: { id, version }, data: { ..., version: { increment: 1 } } })` and throws `JobVersionConflictError` if `count === 0` — it does not trust the entity to have bumped its own version; the entity's `transitionTo()` never touches `version` at all, by design (version is purely a persistence-layer concern, closer to how JPA's `@Version` works than something the domain reasons about).
 
 ## Architecture
 
@@ -67,6 +86,8 @@ src/
     ├── notifications/  # job-completion notifications
     └── audit/          # append-only audit trail
 ```
+
+`prisma/schema.prisma` + `prisma/migrations/` live at the repo root (not under `src/`); `generated/prisma/` (the generated client) is gitignored.
 
 ### Key design decisions to preserve as milestones land
 
