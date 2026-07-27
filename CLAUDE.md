@@ -11,13 +11,15 @@ EventForge: a Kafka-based distributed job processing platform in TypeScript, bui
 ## Commands
 
 ```bash
-npm run lint         # ESLint (flat config, type-aware)
-npm run typecheck    # tsc --noEmit against tsconfig.json (src + tests)
-npm run boundaries   # dependency-cruiser module-boundary check — see below
-npm test             # Jest (all tests under tests/**/*.test.ts)
-npm run build        # tsc -p tsconfig.build.json -> dist/ (src only, no tests)
+npm run dev           # tsx watch src/server.ts — http://localhost:3000/health
+npm run lint          # ESLint (flat config, type-aware)
+npm run typecheck     # tsc --noEmit against tsconfig.json (src + tests)
+npm run boundaries    # dependency-cruiser module-boundary check — see below
+npm test              # Jest (all tests under tests/**/*.test.ts)
+npm run build         # tsc -p tsconfig.build.json -> dist/ (src only, no tests)
+npm start             # node dist/server.js (run npm run build first)
 npm run format        # prettier --check .
-npm run format:write  # prettier --write .
+npm run format:write   # prettier --write .
 ```
 
 Run a single test file: `npx jest tests/smoke.test.ts`. Run tests matching a name: `npx jest -t "some test name"`.
@@ -28,7 +30,15 @@ CI (`.github/workflows/ci.yml`) runs lint → typecheck → boundaries → test 
 
 ### Local infrastructure (Milestone 2)
 
-`docker-compose.yml` at the repo root runs Postgres 16 and Kafka (`apache/kafka:4.3.1`, KRaft mode, no ZooKeeper) plus a one-off `kafka-init` job and an optional `kafka-ui`. Bring it up with `docker compose up -d postgres kafka && docker compose up kafka-init`. The 8 topics (`jobs.requested/started/completed/failed`, `jobs.retry-1/2/3`, `jobs.dead-letter`) are created explicitly by `infrastructure/kafka/create-topics.sh` — **never add reliance on broker auto-create**; if a new topic is needed, add it to that script's `TOPICS` array. Nothing in `src/` talks to this stack yet (starts at Milestone 3/4/6) — the compose stack existing does not mean it's wired into the app.
+`docker-compose.yml` at the repo root runs Postgres 16 and Kafka (`apache/kafka:4.3.1`, KRaft mode, no ZooKeeper) plus a one-off `kafka-init` job and an optional `kafka-ui`. Bring it up with `docker compose up -d postgres kafka && docker compose up kafka-init`. The 8 topics (`jobs.requested/started/completed/failed`, `jobs.retry-1/2/3`, `jobs.dead-letter`) are created explicitly by `infrastructure/kafka/create-topics.sh` — **never add reliance on broker auto-create**; if a new topic is needed, add it to that script's `TOPICS` array. Nothing in `src/` talks to this stack yet (starts at Milestone 4/6) — the compose stack existing does not mean it's wired into the app.
+
+### App vs. server split (Milestone 3)
+
+`src/app.ts` exports `buildApp(config?)`, which builds and returns a Fastify instance — it never calls `.listen()`. This is what lets tests use `app.inject()` without binding a port. `src/server.ts` is the only side-effecting entrypoint: it loads `.env` via `dotenv/config`, calls `buildApp()`, `.listen()`s, and wires `SIGINT`/`SIGTERM` to `app.close()` before `process.exit()`. **Any new route or plugin goes in `app.ts` (or a module's `api/`), never in `server.ts`.**
+
+Config is loaded once via `loadConfig()` in `src/config/env.ts` (zod-validated, defaults for missing vars, throws on invalid ones) and attached to the Fastify instance as `app.config` — modules read `app.config`, they don't call `process.env` directly. Only `NODE_ENV`, `PORT`, and `LOG_LEVEL` are validated so far; extend `envSchema` when a milestone actually starts consuming a new var (e.g. `DATABASE_URL` at Milestone 4), rather than adding it speculatively.
+
+The pino logger (`src/shared/logger.ts`) is passed into Fastify via the `loggerInstance` option (not `logger` — Fastify 5 uses `loggerInstance` specifically for a pre-built logger instance).
 
 ## Architecture
 
@@ -44,7 +54,9 @@ This is enforced mechanically by `.dependency-cruiser.cjs` (`npm run boundaries`
 
 ```
 src/
-├── config/       # env/config loading
+├── app.ts         # buildApp() — pure, testable, no listen()
+├── server.ts      # entrypoint: listen() + graceful shutdown
+├── config/        # env/config loading
 ├── db/            # database wiring
 ├── messaging/     # Kafka producer/consumer wrapper
 ├── outbox/        # transactional outbox publisher

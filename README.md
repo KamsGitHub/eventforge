@@ -2,7 +2,7 @@
 
 A Kafka-based distributed job processing platform, written entirely in TypeScript. It starts as a well-structured modular monolith and is incrementally evolved into independently deployable microservices — demonstrating clean architecture, reliability patterns (transactional outbox, idempotent consumers, retries/DLQ), observability, and testing along the way.
 
-**Status:** early stage. Milestones 1–2 of 24 complete — repo scaffold with enforced module boundaries, plus a local Postgres + Kafka environment. No HTTP server or application code talks to either yet; that starts at Milestone 3.
+**Status:** early stage. Milestones 1–3 of 24 complete — repo scaffold with enforced module boundaries, a local Postgres + Kafka environment, and a running Fastify server with a health endpoint. No database or Kafka wiring from the app yet; that starts at Milestone 4.
 
 The full build plan — every milestone's objective, architecture decisions, database/Kafka changes, tests, and completion criteria — lives in [`docs/roadmap.html`](docs/roadmap.html) (open it in a browser).
 
@@ -16,7 +16,9 @@ A modular monolith, structured so each business module can later be extracted in
 
 ```
 src/
-├── config/            # environment/config loading (Milestone 3)
+├── app.ts              # builds the Fastify instance (pure, testable — no listen())
+├── server.ts           # entrypoint: listens, wires graceful shutdown
+├── config/             # zod-validated environment loading
 ├── db/                 # database wiring (Milestone 4)
 ├── messaging/          # Kafka producer/consumer wrapper (Milestone 6)
 ├── outbox/             # transactional outbox publisher (Milestone 9)
@@ -35,11 +37,13 @@ Each module owns its own `api → application → domain → infrastructure` sli
 
 ```bash
 npm install
-npm run lint        # ESLint
-npm run typecheck   # tsc --noEmit
-npm run boundaries  # module-boundary check (dependency-cruiser)
-npm test            # Jest
+npm run dev          # tsx watch src/server.ts — http://localhost:3000/health
+npm run lint         # ESLint
+npm run typecheck    # tsc --noEmit
+npm run boundaries   # module-boundary check (dependency-cruiser)
+npm test             # Jest
 npm run build        # compile src/ to dist/
+npm start            # node dist/server.js (after npm run build)
 ```
 
 All four checks (lint, typecheck, boundaries, test) run in CI on every push and pull request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The test suite includes a Testcontainers-backed Postgres smoke test, so `npm test` needs a working Docker daemon.
@@ -61,7 +65,7 @@ docker compose up -d kafka-ui         # optional web UI at http://localhost:8080
 | `jobs.retry-1` / `-2` / `-3` | Tiered retry backoff before giving up           |
 | `jobs.dead-letter`           | Retries exhausted; needs manual intervention    |
 
-All topics are created explicitly by `infrastructure/kafka/create-topics.sh` (3 partitions, replication factor 1) — broker auto-create is intentionally never relied on. Postgres credentials and the Kafka broker address match `.env.example`; nothing reads them yet (that's Milestone 3/4).
+All topics are created explicitly by `infrastructure/kafka/create-topics.sh` (3 partitions, replication factor 1) — broker auto-create is intentionally never relied on. Postgres credentials and the Kafka broker address match `.env.example`; the app doesn't read `DATABASE_URL`/`KAFKA_BROKERS` yet (that's Milestone 4/6) — only `NODE_ENV`, `PORT`, and `LOG_LEVEL` are consumed so far, via `src/config/env.ts`.
 
 Connectivity checks:
 
