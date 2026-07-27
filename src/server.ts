@@ -1,8 +1,14 @@
 import 'dotenv/config';
 
 import { buildApp } from '@/app';
+import { prisma } from '@/db/prisma';
+import { JobService } from '@/modules/jobs/application/job.service';
+import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 
-const app = buildApp();
+const jobRepository = new PrismaJobRepository(prisma);
+const jobService = new JobService(jobRepository);
+
+const app = buildApp({ jobService });
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
