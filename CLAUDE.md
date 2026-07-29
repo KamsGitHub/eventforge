@@ -67,6 +67,14 @@ Request validation/serialization goes through `fastify-type-provider-zod` (`vali
 
 `PrismaJobRepository.create()` translates Prisma's `P2002` unique-constraint error (on `idempotencyKey`) into a domain-level `DuplicateJobSubmissionError` — `JobService.createJob()` catches that and returns the existing job via `findByIdempotencyKey()` instead of erroring. This is the HTTP-level duplicate-submission guard (client-supplied `Idempotency-Key` header) — keep it separate from the Kafka `ProcessedEvent` idempotency table arriving at Milestone 10; different mechanism, different table.
 
+### Kafka producer/consumer foundation and event contracts (Milestone 6)
+
+`src/messaging/{kafka-client,producer,consumer}.ts` are thin KafkaJS wrappers, not a framework: `createKafkaClient(brokers)` builds the shared `Kafka` instance, `createProducer()` returns an idempotent producer (`idempotent: true` — KafkaJS then requires `acks: -1`, which is already its default, so it's left implicit rather than re-specified per call), and `createConsumer(kafka, { topic, groupId, handler })` connects, subscribes, and starts `run()` in one call, returning the `Consumer` for the caller to `disconnect()`. `KAFKA_BROKERS` (comma-separated) is now validated in `envSchema`, but **nothing wires this into `server.ts` yet** — that starts at Milestone 9 (outbox) / Milestone 10 (consumers). Don't add a Kafka connection to the composition root before then.
+
+`src/contracts/envelope.ts` + `src/contracts/events/*.ts` are the event envelope and per-event zod schemas (`JobRequested/Started/Completed/Failed`, each schema-versioned as `...SchemaV1`), built now specifically so they're ready before the outbox (M9) and idempotent consumption (M10) need them — see the roadmap's cross-cutting "Event envelope" section for the exact wire shape this mirrors. **No module actually produces or consumes these yet** — `jobs` still leaves rows `PENDING` forever; wiring starts at M9.
+
+**Testcontainers + Kafka gotcha, worth knowing before reaching for `@testcontainers/kafka` again**: its `KafkaContainer` only works with Confluent images (its KRaft bootstrap script targets `/etc/confluent/docker/*`) — it's incompatible with the `apache/kafka:4.3.1` image `docker-compose.yml` uses, so the foundation test in `tests/integration/messaging/kafka.foundation.test.ts` uses `confluentinc/cp-kafka:7.5.0` instead, purely to get a hermetic broker. Also, its **default wait strategy only waits for the TCP port to accept connections**, which fires while the JVM is still initializing — connecting that early gets an immediate `ECONNRESET` on the first real request. Fixed with an explicit `.withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))` so `.start()` doesn't resolve until the broker can actually serve requests.
+
 ## Architecture
 
 ### Module boundary rule (the load-bearing constraint)
