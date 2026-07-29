@@ -83,5 +83,5 @@ describe('Kafka producer/consumer foundation (real broker via Testcontainers)', 
 
     await consumer.disconnect();
     consumer = undefined;
-  }, 60_000);
+  }, 120_000);
 });
