@@ -5,6 +5,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
+  KAFKA_CLIENT_ID: z.string().min(1).default('eventforge'),
 });
 
 export type Config = Readonly<{
@@ -12,6 +14,8 @@ export type Config = Readonly<{
   port: number;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   databaseUrl: string;
+  kafkaBrokers: readonly string[];
+  kafkaClientId: string;
 }>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -26,5 +30,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: parsed.data.PORT,
     logLevel: parsed.data.LOG_LEVEL,
     databaseUrl: parsed.data.DATABASE_URL,
+    kafkaBrokers: parsed.data.KAFKA_BROKERS.split(',').map((broker) => broker.trim()),
+    kafkaClientId: parsed.data.KAFKA_CLIENT_ID,
   };
 }
