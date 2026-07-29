@@ -2,7 +2,7 @@
 
 A Kafka-based distributed job processing platform, written entirely in TypeScript. It starts as a well-structured modular monolith and is incrementally evolved into independently deployable microservices — demonstrating clean architecture, reliability patterns (transactional outbox, idempotent consumers, retries/DLQ), observability, and testing along the way.
 
-**Status:** early stage. Milestones 1–6 of 24 complete — repo scaffold, local Postgres + Kafka, a running Fastify server, Prisma-backed Job persistence, a working `POST/GET /api/jobs` API, and a reusable KafkaJS producer/consumer wrapper with versioned event contracts. Nothing produces or consumes those events yet — jobs created via the API still stay `PENDING` forever; that starts at Milestone 9 (outbox).
+**Status:** early stage. Milestones 1–7 of 24 complete — repo scaffold, local Postgres + Kafka, a running Fastify server, Prisma-backed Job persistence, a working `POST/GET /api/jobs` API, a reusable KafkaJS producer/consumer wrapper with versioned event contracts, and the `execution` module's first real consumer (handles `jobs.requested`, publishes `jobs.completed`/`jobs.failed`). The HTTP API and the execution pipeline aren't connected yet — jobs created via `POST /api/jobs` still stay `PENDING` forever; that starts at Milestone 8.
 
 The full build plan — every milestone's objective, architecture decisions, database/Kafka changes, tests, and completion criteria — lives in [`docs/roadmap.html`](docs/roadmap.html) (open it in a browser).
 
@@ -31,6 +31,9 @@ src/
     │   ├── domain/        # Job entity + transitionTo() state machine, JobRepository port, domain errors
     │   └── infrastructure/  # PrismaJobRepository — the only file here allowed to import the Prisma client
     ├── execution/       # job execution: handler registry, Kafka consumers
+    │   ├── domain/        # JobHandler port + handlers (GenerateReportHandler)
+    │   ├── application/   # ExecuteJobService — job-type -> handler registry/routing
+    │   └── infrastructure/  # jobs-requested.consumer.ts — consumes jobs.requested, publishes completed/failed
     ├── notifications/   # job-completion notifications
     └── audit/           # append-only audit trail
 ```
@@ -47,11 +50,13 @@ GET    /api/jobs               list jobs (?status=, ?limit=, ?offset=)
 GET    /api/jobs/:jobId        get a job by id
 ```
 
-`POST /api/jobs` takes `{ "type": string, "payload": object }` and an optional `Idempotency-Key` header. Replaying the same key returns the original job (same `id`, same `payload`) with `201` again — no second row is created; this is an HTTP-level duplicate-submission guard, distinct from the Kafka consumer idempotency that arrives at Milestone 10. Jobs are created `PENDING` and stay there — nothing consumes them yet, since nothing produces to Kafka until the outbox lands at Milestone 9. `correlationId` is generated server-side per job; clients don't set it.
+`POST /api/jobs` takes `{ "type": string, "payload": object }` and an optional `Idempotency-Key` header. Replaying the same key returns the original job (same `id`, same `payload`) with `201` again — no second row is created; this is an HTTP-level duplicate-submission guard, distinct from the Kafka consumer idempotency that arrives at Milestone 10. Jobs are created `PENDING` and stay there — `JobService.createJob` doesn't publish a `JobRequested` event yet (Milestone 8 wires that, still as a direct `producer.send`; the transactional outbox is Milestone 9). `correlationId` is generated server-side per job; clients don't set it.
 
 ## Messaging
 
-`src/messaging/` wraps KafkaJS: an idempotent producer, and a consumer factory taking `{ topic, groupId, handler }`. `src/contracts/` defines the event envelope (`eventId`, `eventType`, `aggregateId`, `correlationId`, `causationId`, `occurredAt`, `schemaVersion`, `payload`) and versioned per-event payload schemas for `JobRequested`/`JobStarted`/`JobCompleted`/`JobFailed` — built ahead of need so the outbox (Milestone 9) and idempotent consumers (Milestone 10) can focus on their own concern instead of also inventing the wire format. Nothing in `src/` produces or consumes real events yet; `tests/integration/messaging/kafka.foundation.test.ts` exercises the wrapper end-to-end against a throwaway `_dev.ping` topic on a real (Testcontainers) broker.
+`src/messaging/` wraps KafkaJS: an idempotent producer, and a consumer factory taking `{ topic, groupId, handler }`. `src/contracts/` defines the event envelope (`eventId`, `eventType`, `aggregateId`, `correlationId`, `causationId`, `occurredAt`, `schemaVersion`, `payload`) and versioned per-event payload schemas for `JobRequested`/`JobStarted`/`JobCompleted`/`JobFailed` — built ahead of need so the outbox (Milestone 9) and idempotent consumers (Milestone 10) can focus on their own concern instead of also inventing the wire format.
+
+`server.ts` now connects a producer and starts the `execution` module's `jobs-requested` consumer at boot (group `eventforge.execution.job-requested-consumer`), disconnecting both on shutdown. That consumer parses a `JobRequested` envelope, routes `payload.type` through `ExecuteJobService`'s handler registry (currently just `GENERATE_REPORT` → `GenerateReportHandler`, which simulates work and returns a fake report), and publishes `JobCompleted` (success) or `JobFailed` (any thrown error) back onto Kafka — it never touches the `Job` table. Since nothing produces to `jobs.requested` yet (see API section above), exercising this today means publishing a `JobRequested` event manually — `tests/integration/execution/jobs-requested.consumer.test.ts` does exactly that against a real (Testcontainers) broker.
 
 ## Getting started
 
@@ -87,7 +92,7 @@ docker compose up -d kafka-ui         # optional web UI at http://localhost:8080
 | `jobs.retry-1` / `-2` / `-3` | Tiered retry backoff before giving up           |
 | `jobs.dead-letter`           | Retries exhausted; needs manual intervention    |
 
-All topics are created explicitly by `infrastructure/kafka/create-topics.sh` (3 partitions, replication factor 1) — broker auto-create is intentionally never relied on. Postgres credentials match `.env.example`'s `DATABASE_URL`, now read by `src/config/env.ts` and used by `prisma.config.ts`/`src/db/prisma.ts`. `KAFKA_BROKERS` is now validated by `src/config/env.ts`, but no running code reads `app.config.kafkaBrokers` yet — that starts when the outbox (Milestone 9) needs a real producer.
+All topics are created explicitly by `infrastructure/kafka/create-topics.sh` (3 partitions, replication factor 1) — broker auto-create is intentionally never relied on. Postgres credentials match `.env.example`'s `DATABASE_URL`, now read by `src/config/env.ts` and used by `prisma.config.ts`/`src/db/prisma.ts`. `KAFKA_BROKERS`/`KAFKA_CLIENT_ID` are read by `src/config/env.ts` and, since Milestone 7, actually used by `server.ts` to build the producer/consumer described under Messaging above.
 
 Run migrations against the compose Postgres with `npx prisma migrate deploy` (or `npx prisma migrate dev` when authoring a new one).
 
