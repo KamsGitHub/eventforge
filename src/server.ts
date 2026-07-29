@@ -1,7 +1,17 @@
 import 'dotenv/config';
 
+import type { Consumer } from 'kafkajs';
+
 import { buildApp } from '@/app';
 import { prisma } from '@/db/prisma';
+import { createKafkaClient } from '@/messaging/kafka-client';
+import { createProducer } from '@/messaging/producer';
+import { ExecuteJobService } from '@/modules/execution/application/execute-job.service';
+import {
+  GENERATE_REPORT_JOB_TYPE,
+  GenerateReportHandler,
+} from '@/modules/execution/domain/handlers/generate-report.handler';
+import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
 import { JobService } from '@/modules/jobs/application/job.service';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 
@@ -10,10 +20,18 @@ const jobService = new JobService(jobRepository);
 
 const app = buildApp({ jobService });
 
+const kafka = createKafkaClient({ brokers: app.config.kafkaBrokers, clientId: app.config.kafkaClientId });
+const producer = createProducer(kafka);
+const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
+
+let jobsRequestedConsumer: Consumer | undefined;
+
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
 
   try {
+    await jobsRequestedConsumer?.disconnect();
+    await producer.disconnect();
     await app.close();
     process.exit(0);
   } catch (error) {
@@ -25,12 +43,15 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-app
-  .listen({ port: app.config.port, host: '0.0.0.0' })
-  .then((address) => {
-    app.log.info({ address }, 'server listening');
-  })
-  .catch((error: unknown) => {
-    app.log.error({ error }, 'failed to start server');
-    process.exit(1);
-  });
+async function start(): Promise<void> {
+  await producer.connect();
+  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
+
+  const address = await app.listen({ port: app.config.port, host: '0.0.0.0' });
+  app.log.info({ address }, 'server listening');
+}
+
+start().catch((error: unknown) => {
+  app.log.error({ error }, 'failed to start server');
+  process.exit(1);
+});
