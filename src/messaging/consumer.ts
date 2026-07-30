@@ -7,12 +7,22 @@ export interface ConsumerOptions {
   readonly groupId: string;
   readonly handler: MessageHandler;
   readonly fromBeginning?: boolean;
+  /**
+   * Defaults to true (KafkaJS's own default). Idempotent consumers pass
+   * false and rely on this function to commit each message's offset only
+   * after `handler` resolves — so a crash between processing a message and
+   * committing its offset always redelivers on restart rather than
+   * silently skipping. See idempotent-consumer.ts for why redelivery is
+   * safe: it's the whole reason autoCommit is turned off here.
+   */
+  readonly autoCommit?: boolean;
 }
 
 export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Promise<Consumer> {
   const consumer = kafka.consumer({ groupId: options.groupId });
 
   const topics = typeof options.topic === 'string' ? [options.topic] : options.topic;
+  const autoCommit = options.autoCommit ?? true;
 
   await consumer.connect();
   await consumer.subscribe({ topics: [...topics], fromBeginning: options.fromBeginning ?? false });
@@ -27,7 +37,17 @@ export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Pr
     consumer.on(consumer.events.GROUP_JOIN, () => resolve());
   });
 
-  await consumer.run({ eachMessage: options.handler });
+  await consumer.run({
+    autoCommit,
+    eachMessage: async (payload) => {
+      await options.handler(payload);
+
+      if (!autoCommit) {
+        const { topic, partition, message } = payload;
+        await consumer.commitOffsets([{ topic, partition, offset: (BigInt(message.offset) + 1n).toString() }]);
+      }
+    },
+  });
   await joinedGroup;
 
   return consumer;

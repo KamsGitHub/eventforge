@@ -56,3 +56,17 @@ model OutboxEvent {
   @@index([createdAt])
   @@map("outbox_events")
 }
+
+model ProcessedEvent {
+  id           String   @id @default(uuid())
+  eventId      String
+  consumerName String
+  processedAt  DateTime @default(now())
+
+  // The unique constraint IS the idempotency guarantee: two processes
+  // racing to insert the same (eventId, consumerName) pair have the race
+  // serialized by Postgres — the loser's insert fails and it no-ops
+  // instead of double-applying the event.
+  @@unique([eventId, consumerName])
+  @@map("processed_events")
+}
