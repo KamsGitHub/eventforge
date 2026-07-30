@@ -3,6 +3,7 @@ import 'dotenv/config';
 import type { Consumer } from 'kafkajs';
 
 import { buildApp } from '@/app';
+import { loadConfig } from '@/config/env';
 import { prisma } from '@/db/prisma';
 import { createKafkaClient } from '@/messaging/kafka-client';
 import { createProducer } from '@/messaging/producer';
@@ -13,24 +14,29 @@ import {
 } from '@/modules/execution/domain/handlers/generate-report.handler';
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
 import { JobService } from '@/modules/jobs/application/job.service';
+import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status.consumer';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 
+const config = loadConfig();
 const jobRepository = new PrismaJobRepository(prisma);
-const jobService = new JobService(jobRepository);
 
-const app = buildApp({ jobService });
-
-const kafka = createKafkaClient({ brokers: app.config.kafkaBrokers, clientId: app.config.kafkaClientId });
+const kafka = createKafkaClient({ brokers: config.kafkaBrokers, clientId: config.kafkaClientId });
 const producer = createProducer(kafka);
 const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
 
+const jobService = new JobService(jobRepository, producer);
+
+const app = buildApp({ config, jobService });
+
 let jobsRequestedConsumer: Consumer | undefined;
+let jobStatusConsumer: Consumer | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
 
   try {
     await jobsRequestedConsumer?.disconnect();
+    await jobStatusConsumer?.disconnect();
     await producer.disconnect();
     await app.close();
     process.exit(0);
@@ -46,6 +52,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 async function start(): Promise<void> {
   await producer.connect();
   jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
+  jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository });
 
   const address = await app.listen({ port: app.config.port, host: '0.0.0.0' });
   app.log.info({ address }, 'server listening');

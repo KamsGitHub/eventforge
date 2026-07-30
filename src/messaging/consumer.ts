@@ -3,7 +3,7 @@ import type { Consumer, EachMessagePayload, Kafka } from 'kafkajs';
 export type MessageHandler = (payload: EachMessagePayload) => Promise<void>;
 
 export interface ConsumerOptions {
-  readonly topic: string;
+  readonly topic: string | readonly string[];
   readonly groupId: string;
   readonly handler: MessageHandler;
   readonly fromBeginning?: boolean;
@@ -12,8 +12,10 @@ export interface ConsumerOptions {
 export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Promise<Consumer> {
   const consumer = kafka.consumer({ groupId: options.groupId });
 
+  const topics = typeof options.topic === 'string' ? [options.topic] : options.topic;
+
   await consumer.connect();
-  await consumer.subscribe({ topic: options.topic, fromBeginning: options.fromBeginning ?? false });
+  await consumer.subscribe({ topics: [...topics], fromBeginning: options.fromBeginning ?? false });
 
   // consumer.run() starts the fetch loop in the background and resolves
   // before the initial group join/partition assignment completes — a
