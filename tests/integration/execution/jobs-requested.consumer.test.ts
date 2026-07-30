@@ -6,6 +6,7 @@ import { createEnvelope } from '@/contracts/envelope';
 import { jobCompletedEventSchemaV1 } from '@/contracts/events/job-completed.event';
 import { jobFailedEventSchemaV1 } from '@/contracts/events/job-failed.event';
 import { JOB_REQUESTED_EVENT_TYPE, JOB_REQUESTED_SCHEMA_VERSION } from '@/contracts/events/job-requested.event';
+import { createPrismaClient, type PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { createKafkaClient } from '@/messaging/kafka-client';
 import { createProducer, publish } from '@/messaging/producer';
@@ -15,6 +16,8 @@ import {
   GenerateReportHandler,
 } from '@/modules/execution/domain/handlers/generate-report.handler';
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
+
+import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
 
 const JOBS_REQUESTED_TOPIC = 'jobs.requested';
 const JOBS_COMPLETED_TOPIC = 'jobs.completed';
@@ -27,8 +30,13 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
   let kafka: Kafka;
   let producer: Producer;
   let jobsRequestedConsumer: Consumer;
+  let dbContainer: TestDatabase;
+  let prisma: PrismaClient;
 
   beforeAll(async () => {
+    dbContainer = await createTestDatabase();
+    prisma = createPrismaClient(dbContainer.connectionUri);
+
     container = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
       .withKraft()
       .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
@@ -54,13 +62,15 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
     await producer.connect();
 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
-    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
+    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
   }, 120_000);
 
   afterAll(async () => {
     await jobsRequestedConsumer?.disconnect();
     await producer?.disconnect();
     await container?.stop();
+    await prisma?.$disconnect();
+    await dbContainer?.container.stop();
   }, 120_000);
 
   async function consumeOne(

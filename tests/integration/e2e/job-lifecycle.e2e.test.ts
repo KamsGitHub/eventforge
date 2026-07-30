@@ -95,8 +95,8 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     app = buildApp({ config, jobService });
 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
-    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
-    jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository });
+    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
+    jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });
 
     outboxPublisher = new OutboxPublisher({
       prisma,
@@ -121,6 +121,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
   afterEach(async () => {
     await prisma.job.deleteMany();
     await prisma.outboxEvent.deleteMany();
+    await prisma.processedEvent.deleteMany();
   });
 
   it('runs a job through the full spec workflow: PENDING -> QUEUED -> RUNNING -> SUCCEEDED', async () => {

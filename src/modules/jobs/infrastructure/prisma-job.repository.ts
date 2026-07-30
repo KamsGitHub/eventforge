@@ -4,7 +4,7 @@ import type { NewOutboxEvent } from '@/outbox/outbox.types';
 
 import { DuplicateJobSubmissionError, JobVersionConflictError } from '../domain/errors';
 import { Job, type JobProps } from '../domain/job.entity';
-import type { JobListFilter, JobRepository } from '../domain/job-repository.port';
+import type { JobListFilter, JobRepository, JobRepositoryClient } from '../domain/job-repository.port';
 
 function toProps(row: PrismaJobRow): JobProps {
   return {
@@ -91,8 +91,8 @@ export class PrismaJobRepository implements JobRepository {
     }
   }
 
-  async findById(id: string): Promise<Job | null> {
-    const row = await this.prisma.job.findUnique({ where: { id } });
+  async findById(id: string, client: JobRepositoryClient = this.prisma): Promise<Job | null> {
+    const row = await client.job.findUnique({ where: { id } });
 
     return row ? Job.fromProps(toProps(row)) : null;
   }
@@ -114,10 +114,10 @@ export class PrismaJobRepository implements JobRepository {
     return rows.map((row) => Job.fromProps(toProps(row)));
   }
 
-  async update(job: Job): Promise<Job> {
+  async update(job: Job, client: JobRepositoryClient = this.prisma): Promise<Job> {
     const props = job.props;
 
-    const { count } = await this.prisma.job.updateMany({
+    const { count } = await client.job.updateMany({
       where: { id: props.id, version: props.version },
       data: {
         status: props.status,
@@ -138,7 +138,7 @@ export class PrismaJobRepository implements JobRepository {
       throw new JobVersionConflictError(props.id, props.version);
     }
 
-    const updated = await this.findById(props.id);
+    const updated = await this.findById(props.id, client);
 
     /* istanbul ignore next -- the row cannot vanish between updateMany and findById within one request */
     if (!updated) {

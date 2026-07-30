@@ -59,8 +59,8 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 async function start(): Promise<void> {
   await producer.connect();
-  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
-  jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository });
+  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
+  jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });
   outboxPublisher.start();
 
   const address = await app.listen({ port: app.config.port, host: '0.0.0.0' });

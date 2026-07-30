@@ -5,7 +5,9 @@ import { JOB_COMPLETED_EVENT_TYPE, JOB_COMPLETED_SCHEMA_VERSION } from '@/contra
 import { JOB_FAILED_EVENT_TYPE, JOB_FAILED_SCHEMA_VERSION } from '@/contracts/events/job-failed.event';
 import { jobRequestedEventSchemaV1 } from '@/contracts/events/job-requested.event';
 import { JOB_STARTED_EVENT_TYPE, JOB_STARTED_SCHEMA_VERSION } from '@/contracts/events/job-started.event';
+import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
+import { withIdempotency } from '@/messaging/idempotent-consumer';
 import { publish } from '@/messaging/producer';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
@@ -23,6 +25,7 @@ export interface JobsRequestedConsumerOptions {
   readonly kafka: Kafka;
   readonly producer: Producer;
   readonly executeJobService: ExecuteJobService;
+  readonly prisma: PrismaClient;
 }
 
 export async function startJobsRequestedConsumer(options: JobsRequestedConsumerOptions): Promise<Consumer> {
@@ -31,8 +34,9 @@ export async function startJobsRequestedConsumer(options: JobsRequestedConsumerO
   return createConsumer(options.kafka, {
     topic: JOBS_REQUESTED_TOPIC,
     groupId: CONSUMER_GROUP_ID,
-    handler: async ({ message }) => {
-      const envelope = jobRequestedEventSchemaV1.parse(JSON.parse(message.value?.toString() ?? '{}'));
+    autoCommit: false,
+    handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (_payload, _tx, body) => {
+      const envelope = jobRequestedEventSchemaV1.parse(body);
       const jobId = envelope.aggregateId;
 
       const started = createEnvelope({
@@ -71,6 +75,6 @@ export async function startJobsRequestedConsumer(options: JobsRequestedConsumerO
 
         await publish(producer, { topic: JOBS_FAILED_TOPIC, key: jobId, value: failed });
       }
-    },
+    }),
   });
 }
