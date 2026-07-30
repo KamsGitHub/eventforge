@@ -14,19 +14,26 @@ import {
 } from '@/modules/execution/domain/handlers/generate-report.handler';
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
 import { JobService } from '@/modules/jobs/application/job.service';
+import { createJobOutboxPublishedHandler } from '@/modules/jobs/infrastructure/job-outbox-published.handler';
 import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status.consumer';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
+import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
 const config = loadConfig();
 const jobRepository = new PrismaJobRepository(prisma);
+const jobService = new JobService(jobRepository);
+
+const app = buildApp({ config, jobService });
 
 const kafka = createKafkaClient({ brokers: config.kafkaBrokers, clientId: config.kafkaClientId });
 const producer = createProducer(kafka);
 const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
 
-const jobService = new JobService(jobRepository, producer);
-
-const app = buildApp({ config, jobService });
+const outboxPublisher = new OutboxPublisher({
+  prisma,
+  producer,
+  onPublished: createJobOutboxPublishedHandler(jobRepository),
+});
 
 let jobsRequestedConsumer: Consumer | undefined;
 let jobStatusConsumer: Consumer | undefined;
@@ -35,6 +42,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
 
   try {
+    outboxPublisher.stop();
     await jobsRequestedConsumer?.disconnect();
     await jobStatusConsumer?.disconnect();
     await producer.disconnect();
@@ -53,6 +61,7 @@ async function start(): Promise<void> {
   await producer.connect();
   jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
   jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository });
+  outboxPublisher.start();
 
   const address = await app.listen({ port: app.config.port, host: '0.0.0.0' });
   app.log.info({ address }, 'server listening');

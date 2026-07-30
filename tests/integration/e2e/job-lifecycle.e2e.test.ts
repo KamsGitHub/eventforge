@@ -15,8 +15,10 @@ import {
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
 import type { JobResponse } from '@/modules/jobs/api/schemas';
 import { JobService } from '@/modules/jobs/application/job.service';
+import { createJobOutboxPublishedHandler } from '@/modules/jobs/infrastructure/job-outbox-published.handler';
 import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status.consumer';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
+import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
 import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
 
@@ -53,6 +55,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
   let producer: Producer;
   let jobsRequestedConsumer: Consumer;
   let jobStatusConsumer: Consumer;
+  let outboxPublisher: OutboxPublisher;
   let app: ReturnType<typeof buildApp>;
 
   beforeAll(async () => {
@@ -86,7 +89,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     await producer.connect();
 
     const jobRepository = new PrismaJobRepository(prisma);
-    const jobService = new JobService(jobRepository, producer);
+    const jobService = new JobService(jobRepository);
 
     const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: dbContainer.connectionUri });
     app = buildApp({ config, jobService });
@@ -94,9 +97,18 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
     jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService });
     jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository });
+
+    outboxPublisher = new OutboxPublisher({
+      prisma,
+      producer,
+      pollIntervalMs: 200,
+      onPublished: createJobOutboxPublishedHandler(jobRepository),
+    });
+    outboxPublisher.start();
   }, 120_000);
 
   afterAll(async () => {
+    outboxPublisher?.stop();
     await app?.close();
     await jobsRequestedConsumer?.disconnect();
     await jobStatusConsumer?.disconnect();
@@ -108,6 +120,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
 
   afterEach(async () => {
     await prisma.job.deleteMany();
+    await prisma.outboxEvent.deleteMany();
   });
 
   it('runs a job through the full spec workflow: PENDING -> QUEUED -> RUNNING -> SUCCEEDED', async () => {
@@ -119,7 +132,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
 
     expect(created.statusCode).toBe(201);
     const job = created.json<JobResponse>();
-    expect(job.status).toBe('QUEUED');
+    expect(job.status).toBe('PENDING');
 
     const final = await pollUntilTerminal(app, job.id);
 
