@@ -1,4 +1,6 @@
 import { Prisma, type PrismaClient, type PrismaJobRow } from '@/db/prisma-client';
+import { insertOutboxEvent } from '@/outbox/outbox.repository';
+import type { NewOutboxEvent } from '@/outbox/outbox.types';
 
 import { DuplicateJobSubmissionError, JobVersionConflictError } from '../domain/errors';
 import { Job, type JobProps } from '../domain/job.entity';
@@ -61,6 +63,26 @@ export class PrismaJobRepository implements JobRepository {
       // P2002 = unique constraint violation. idempotencyKey is currently the
       // only unique column besides the primary key, so this is unambiguous;
       // revisit this check if a second unique constraint is ever added.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && job.props.idempotencyKey) {
+        throw new DuplicateJobSubmissionError(job.props.idempotencyKey);
+      }
+
+      throw error;
+    }
+  }
+
+  async createWithOutboxEvent(job: Job, outboxEvent: NewOutboxEvent): Promise<Job> {
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.job.create({ data: toCreateInput(job.props) });
+        await insertOutboxEvent(tx, outboxEvent);
+
+        return created;
+      });
+
+      return Job.fromProps(toProps(row));
+    } catch (error) {
+      // Same P2002 -> DuplicateJobSubmissionError translation as create().
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && job.props.idempotencyKey) {
         throw new DuplicateJobSubmissionError(job.props.idempotencyKey);
       }

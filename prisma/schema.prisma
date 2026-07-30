@@ -37,3 +37,22 @@ model Job {
 
   @@map("jobs")
 }
+
+model OutboxEvent {
+  id                 String    @id @default(uuid())
+  aggregateId        String
+  eventType          String
+  topic              String
+  messageKey         String
+  payload            Json
+  createdAt          DateTime  @default(now())
+  publishedAt        DateTime?
+  publishingAttempts Int       @default(0)
+  lastError          String?
+
+  // Prisma's schema DSL has no partial-index syntax; the real (WHERE
+  // published_at IS NULL) index is hand-added as raw SQL in the migration —
+  // this @@index only keeps `prisma migrate diff` from flagging it as drift.
+  @@index([createdAt])
+  @@map("outbox_events")
+}

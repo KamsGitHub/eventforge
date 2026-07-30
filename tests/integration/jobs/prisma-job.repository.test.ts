@@ -23,6 +23,7 @@ describe('PrismaJobRepository (real Postgres via Testcontainers)', () => {
 
   afterEach(async () => {
     await prisma.job.deleteMany();
+    await prisma.outboxEvent.deleteMany();
   });
 
   it('creates a job and finds it by id', async () => {
@@ -100,5 +101,58 @@ describe('PrismaJobRepository (real Postgres via Testcontainers)', () => {
     await repository.create(first);
 
     await expect(repository.create(second)).rejects.toThrow();
+  });
+
+  describe('createWithOutboxEvent', () => {
+    it('inserts the job row and the outbox event in one transaction', async () => {
+      const job = Job.createNew({ type: 'GENERATE_REPORT', payload: { reportId: 1 }, correlationId: 'corr-1' });
+
+      const created = await repository.createWithOutboxEvent(job, {
+        aggregateId: job.props.id,
+        eventType: 'JobRequested',
+        topic: 'jobs.requested',
+        messageKey: job.props.id,
+        payload: { hello: 'world' },
+      });
+
+      expect(created.props.status).toBe('PENDING');
+
+      const outboxRows = await prisma.outboxEvent.findMany({ where: { aggregateId: job.props.id } });
+      expect(outboxRows).toHaveLength(1);
+      expect(outboxRows[0]?.topic).toBe('jobs.requested');
+      expect(outboxRows[0]?.eventType).toBe('JobRequested');
+      expect(outboxRows[0]?.publishedAt).toBeNull();
+      expect(outboxRows[0]?.payload).toEqual({ hello: 'world' });
+    });
+
+    it('rolls back the outbox insert when the job insert fails (idempotencyKey conflict)', async () => {
+      const first = Job.createNew({
+        type: 'GENERATE_REPORT',
+        payload: {},
+        correlationId: 'corr-1',
+        idempotencyKey: 'idem-outbox-1',
+      });
+      await repository.create(first);
+
+      const second = Job.createNew({
+        type: 'GENERATE_REPORT',
+        payload: {},
+        correlationId: 'corr-2',
+        idempotencyKey: 'idem-outbox-1',
+      });
+
+      await expect(
+        repository.createWithOutboxEvent(second, {
+          aggregateId: second.props.id,
+          eventType: 'JobRequested',
+          topic: 'jobs.requested',
+          messageKey: second.props.id,
+          payload: {},
+        }),
+      ).rejects.toThrow();
+
+      const outboxRows = await prisma.outboxEvent.findMany({ where: { aggregateId: second.props.id } });
+      expect(outboxRows).toHaveLength(0);
+    });
   });
 });

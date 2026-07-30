@@ -1,10 +1,14 @@
 import { DuplicateJobSubmissionError, JobVersionConflictError } from '@/modules/jobs/domain/errors';
 import { Job } from '@/modules/jobs/domain/job.entity';
 import type { JobListFilter, JobRepository } from '@/modules/jobs/domain/job-repository.port';
+import type { NewOutboxEvent } from '@/outbox/outbox.types';
 
 /** In-memory JobRepository test double — no database involved. */
 export class InMemoryJobRepository implements JobRepository {
   private readonly jobsById = new Map<string, Job>();
+
+  /** Outbox events "inserted" via createWithOutboxEvent — for tests to assert on, no real outbox involved. */
+  readonly outboxEvents: NewOutboxEvent[] = [];
 
   create(job: Job): Promise<Job> {
     if (job.props.idempotencyKey && this.findByIdempotencyKeySync(job.props.idempotencyKey)) {
@@ -14,6 +18,13 @@ export class InMemoryJobRepository implements JobRepository {
     this.jobsById.set(job.props.id, job);
 
     return Promise.resolve(job);
+  }
+
+  async createWithOutboxEvent(job: Job, outboxEvent: NewOutboxEvent): Promise<Job> {
+    const created = await this.create(job);
+    this.outboxEvents.push(outboxEvent);
+
+    return created;
   }
 
   findById(id: string): Promise<Job | null> {

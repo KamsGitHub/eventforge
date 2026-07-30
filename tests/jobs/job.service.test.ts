@@ -1,27 +1,28 @@
 import { JobService } from '@/modules/jobs/application/job.service';
 
-import { createFakeProducer } from './fakes/fake-producer';
 import { InMemoryJobRepository } from './fakes/in-memory-job.repository';
 
 describe('JobService', () => {
-  it('creates a job, publishes JobRequested, and transitions it to QUEUED', async () => {
-    const fakeProducer = createFakeProducer();
-    const service = new JobService(new InMemoryJobRepository(), fakeProducer.producer);
+  it('creates a job in PENDING and enqueues a JobRequested outbox event', async () => {
+    const repository = new InMemoryJobRepository();
+    const service = new JobService(repository);
 
     const job = await service.createJob({ type: 'GENERATE_REPORT', payload: { reportId: 1 } });
 
-    expect(job.props.status).toBe('QUEUED');
+    expect(job.props.status).toBe('PENDING');
     expect(job.props.type).toBe('GENERATE_REPORT');
     expect(job.props.payload).toEqual({ reportId: 1 });
     expect(job.props.correlationId).toEqual(expect.any(String));
     expect(job.props.correlationId.length).toBeGreaterThan(0);
-    expect(fakeProducer.send).toHaveBeenCalledTimes(1);
 
-    expect(fakeProducer.send.mock.calls[0]?.[0].topic).toBe('jobs.requested');
+    expect(repository.outboxEvents).toHaveLength(1);
+    expect(repository.outboxEvents[0]?.topic).toBe('jobs.requested');
+    expect(repository.outboxEvents[0]?.aggregateId).toBe(job.props.id);
+    expect(repository.outboxEvents[0]?.eventType).toBe('JobRequested');
   });
 
   it('returns the existing job when the same idempotencyKey is submitted twice', async () => {
-    const service = new JobService(new InMemoryJobRepository(), createFakeProducer().producer);
+    const service = new JobService(new InMemoryJobRepository());
 
     const first = await service.createJob({ type: 'GENERATE_REPORT', payload: { a: 1 }, idempotencyKey: 'idem-1' });
     const second = await service.createJob({ type: 'GENERATE_REPORT', payload: { a: 2 }, idempotencyKey: 'idem-1' });
@@ -31,7 +32,7 @@ describe('JobService', () => {
   });
 
   it('creates separate jobs when no idempotencyKey is given', async () => {
-    const service = new JobService(new InMemoryJobRepository(), createFakeProducer().producer);
+    const service = new JobService(new InMemoryJobRepository());
 
     const first = await service.createJob({ type: 'GENERATE_REPORT', payload: {} });
     const second = await service.createJob({ type: 'GENERATE_REPORT', payload: {} });
@@ -40,7 +41,7 @@ describe('JobService', () => {
   });
 
   it('getJob returns null for an unknown id', async () => {
-    const service = new JobService(new InMemoryJobRepository(), createFakeProducer().producer);
+    const service = new JobService(new InMemoryJobRepository());
 
     const job = await service.getJob('00000000-0000-0000-0000-000000000000');
 
@@ -48,7 +49,7 @@ describe('JobService', () => {
   });
 
   it('getJob returns the created job by id', async () => {
-    const service = new JobService(new InMemoryJobRepository(), createFakeProducer().producer);
+    const service = new JobService(new InMemoryJobRepository());
     const created = await service.createJob({ type: 'GENERATE_REPORT', payload: {} });
 
     const found = await service.getJob(created.props.id);
@@ -59,7 +60,7 @@ describe('JobService', () => {
   describe('listJobs', () => {
     it('defaults to the 20 most recent jobs', async () => {
       const repository = new InMemoryJobRepository();
-      const service = new JobService(repository, createFakeProducer().producer);
+      const service = new JobService(repository);
 
       for (let i = 0; i < 25; i += 1) {
         await service.createJob({ type: 'GENERATE_REPORT', payload: { i } });
@@ -71,7 +72,7 @@ describe('JobService', () => {
     });
 
     it('caps limit at 100 even if a larger value is requested', async () => {
-      const service = new JobService(new InMemoryJobRepository(), createFakeProducer().producer);
+      const service = new JobService(new InMemoryJobRepository());
 
       const jobs = await service.listJobs({ limit: 500 });
 
@@ -80,9 +81,10 @@ describe('JobService', () => {
 
     it('filters by status', async () => {
       const repository = new InMemoryJobRepository();
-      const service = new JobService(repository, createFakeProducer().producer);
+      const service = new JobService(repository);
 
       const job = await service.createJob({ type: 'GENERATE_REPORT', payload: {} });
+      await repository.update(job.transitionTo('QUEUED'));
 
       const pending = await service.listJobs({ status: 'PENDING' });
       const queued = await service.listJobs({ status: 'QUEUED' });
@@ -94,7 +96,7 @@ describe('JobService', () => {
 
     it('supports offset-based pagination', async () => {
       const repository = new InMemoryJobRepository();
-      const service = new JobService(repository, createFakeProducer().producer);
+      const service = new JobService(repository);
 
       const created = [];
       for (let i = 0; i < 3; i += 1) {
