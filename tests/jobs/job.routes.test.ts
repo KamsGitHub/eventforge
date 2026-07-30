@@ -4,6 +4,7 @@ import { JobService } from '@/modules/jobs/application/job.service';
 import type { JobResponse, ListJobsResponseSchema } from '@/modules/jobs/api/schemas';
 import type { z } from 'zod';
 
+import { createFakeProducer } from './fakes/fake-producer';
 import { InMemoryJobRepository } from './fakes/in-memory-job.repository';
 
 type ListJobsResponse = z.infer<typeof ListJobsResponseSchema>;
@@ -12,7 +13,7 @@ type ErrorBody = { error: string };
 function buildTestApp() {
   const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: 'postgresql://user:pass@localhost:5432/db' });
   const repository = new InMemoryJobRepository();
-  const jobService = new JobService(repository);
+  const jobService = new JobService(repository, createFakeProducer().producer);
   const app = buildApp({ config, jobService });
 
   return { app, repository };
@@ -30,7 +31,7 @@ describe('POST /api/jobs', () => {
 
     expect(response.statusCode).toBe(201);
     const body = response.json<JobResponse>();
-    expect(body.status).toBe('PENDING');
+    expect(body.status).toBe('QUEUED');
     expect(body.type).toBe('GENERATE_REPORT');
     expect(body.payload).toEqual({ reportId: 42 });
     expect(body.id).toEqual(expect.any(String));
@@ -178,14 +179,14 @@ describe('GET /api/jobs', () => {
     const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'A', payload: {} } });
     const job = await repository.findById(created.json<JobResponse>().id);
     if (job) {
-      await repository.update(job.transitionTo('QUEUED'));
+      await repository.update(job.transitionTo('RUNNING'));
     }
 
-    const pending = await app.inject({ method: 'GET', url: '/api/jobs?status=PENDING' });
     const queued = await app.inject({ method: 'GET', url: '/api/jobs?status=QUEUED' });
+    const running = await app.inject({ method: 'GET', url: '/api/jobs?status=RUNNING' });
 
-    expect(pending.json<ListJobsResponse>().jobs).toHaveLength(0);
-    expect(queued.json<ListJobsResponse>().jobs).toHaveLength(1);
+    expect(queued.json<ListJobsResponse>().jobs).toHaveLength(0);
+    expect(running.json<ListJobsResponse>().jobs).toHaveLength(1);
 
     await app.close();
   });
