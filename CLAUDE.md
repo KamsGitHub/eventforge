@@ -83,6 +83,19 @@ The `execution` module's first real Kafka wiring: `modules/execution/domain/job-
 
 **`server.ts` now constructs the first real `Kafka`/`Producer`/`Consumer` instances** — a `createKafkaClient` from `app.config.kafkaBrokers`/`kafkaClientId`, a producer connected at startup, and `startJobsRequestedConsumer(...)` — and disconnects both in `shutdown()` before `app.close()`. This corrects an earlier (wrong) assumption in this file that Kafka wiring in the composition root starts at M9/M10: the outbox (M9) and consumer idempotency (M10) are refinements of flows that go live here and at M8, not the first time a connection exists. **`JobService.createJob()` still doesn't publish anything** — jobs created via the HTTP API stay `PENDING` forever until M8 wires `JobService.create` to actually produce `JobRequested`; only a manually-published `JobRequested` event (e.g. from a test or script) flows through today.
 
+### Job lifecycle events and status updates (Milestone 8)
+
+Closes the loop: the full `jobs.requested → jobs.started → jobs.completed|failed` workflow now runs end-to-end, at-most-once (no outbox, no consumer idempotency yet — those are M9/M10). Two things now happen that didn't before:
+
+- **`JobService.createJob()` really publishes.** After the row is inserted `PENDING`, it builds a `JobRequested` envelope and does a **direct `producer.send`** (via the shared `publish()` helper) — still no outbox, exactly the gap M9 closes — then immediately transitions the job to `QUEUED` and persists that via `JobRepository.update()`. `JobService`'s constructor now takes a `Producer` as a second argument alongside the repository.
+- **Execution publishes `JobStarted`** in `jobs-requested.consumer.ts`, unconditionally, before invoking the handler (not inside the try/catch that produces `JobCompleted`/`JobFailed` — a start notification isn't a handler outcome).
+
+**`modules/jobs/infrastructure/job-status.consumer.ts`** is the jobs module's own status consumer — the *only* writer of `Job.status`, per the cross-cutting rule below. It subscribes to `jobs.started`/`jobs.completed`/`jobs.failed` on one consumer group and calls `Job.transitionTo()` accordingly (`RUNNING` / `SUCCEEDED` with `result` / `FAILED` with `error`). This needed `createConsumer()` (`src/messaging/consumer.ts`) to accept `topic: string | readonly string[]` — previously single-topic-only — since one consumer group here legitimately needs three topics, not three separate consumer groups each independently rebalancing.
+
+**Not yet, deliberately**: redelivery of an already-applied `jobs.started`/`completed`/`failed` event throws `IllegalJobStateTransitionError` (e.g. re-consuming `jobs.started` after the job is already `RUNNING`) rather than being ignored — this is the "duplicate events currently double-apply" gap the roadmap calls out, fixed by consumer idempotency at M10, not worked around here.
+
+`tests/integration/e2e/job-lifecycle.e2e.test.ts` is the first true end-to-end test: real Postgres + real Kafka (both via Testcontainers), the full `buildApp()`, both consumers, and both the execution module's handler and the jobs module's status consumer wired together — POSTs a job via `app.inject()`, polls GET until terminal, and asserts the final state/timestamps for both the success and failure paths.
+
 ## Architecture
 
 ### Module boundary rule (the load-bearing constraint)
