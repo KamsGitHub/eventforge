@@ -1,13 +1,16 @@
 import type { Producer } from 'kafkajs';
 
 import { createEnvelope } from '@/contracts/envelope';
+import { JOB_CANCELLED_EVENT_TYPE, JOB_CANCELLED_SCHEMA_VERSION } from '@/contracts/events/job-cancelled.event';
 import { JOB_COMPLETED_EVENT_TYPE, JOB_COMPLETED_SCHEMA_VERSION } from '@/contracts/events/job-completed.event';
 import { JOB_FAILED_EVENT_TYPE, JOB_FAILED_SCHEMA_VERSION } from '@/contracts/events/job-failed.event';
 import { jobRequestedEventSchemaV1 } from '@/contracts/events/job-requested.event';
 import { JOB_STARTED_EVENT_TYPE, JOB_STARTED_SCHEMA_VERSION } from '@/contracts/events/job-started.event';
+import { JOBS_CANCELLED_TOPIC } from '@/contracts/topics';
 import { publish } from '@/messaging/producer';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
+import type { CancellationChecker } from '../domain/cancellation-checker.port';
 import { publishMalformedMessageToDeadLetter } from './dead-letter';
 
 export const JOBS_STARTED_TOPIC = 'jobs.started';
@@ -17,6 +20,12 @@ export const JOBS_FAILED_TOPIC = 'jobs.failed';
 export interface ProcessJobRequestedDeps {
   readonly producer: Producer;
   readonly executeJobService: ExecuteJobService;
+  /**
+   * Optional so tests/fakes that don't care about cancellation can omit it;
+   * a missing checker behaves as "never cancelled". Real wiring always
+   * supplies one (see server.ts).
+   */
+  readonly isJobCancelled?: CancellationChecker;
 }
 
 /**
@@ -41,6 +50,15 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
   const envelope = parsed.data;
   const jobId = envelope.aggregateId;
   const { attempt, type, payload: jobPayload, maxAttempts, failureHistory } = envelope.payload;
+  const isCancelled = (): Promise<boolean> => deps.isJobCancelled?.(jobId) ?? Promise.resolve(false);
+
+  // Covers the race where a PENDING/QUEUED cancel lands after this event
+  // was already produced to Kafka but before it's consumed here — the job's
+  // status is already CANCELLED by the time we'd otherwise dispatch it, so
+  // skip entirely rather than resurrecting it with a JobStarted/Completed.
+  if (await isCancelled()) {
+    return;
+  }
 
   const started = createEnvelope({
     eventType: JOB_STARTED_EVENT_TYPE,
@@ -53,8 +71,15 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
 
   await publish(deps.producer, { topic: JOBS_STARTED_TOPIC, key: jobId, value: started });
 
+  const context = { isCancelled };
+
   try {
-    const result = await deps.executeJobService.execute(type, jobPayload);
+    const result = await deps.executeJobService.execute(type, jobPayload, context);
+
+    if (await isCancelled()) {
+      await publishCancelled(deps.producer, jobId, envelope);
+      return;
+    }
 
     const completed = createEnvelope({
       eventType: JOB_COMPLETED_EVENT_TYPE,
@@ -67,6 +92,11 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
 
     await publish(deps.producer, { topic: JOBS_COMPLETED_TOPIC, key: jobId, value: completed });
   } catch (error) {
+    if (await isCancelled()) {
+      await publishCancelled(deps.producer, jobId, envelope);
+      return;
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     const failed = createEnvelope({
@@ -87,4 +117,21 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
 
     await publish(deps.producer, { topic: JOBS_FAILED_TOPIC, key: jobId, value: failed });
   }
+}
+
+async function publishCancelled(
+  producer: Producer,
+  jobId: string,
+  triggeringEnvelope: { readonly eventId: string; readonly correlationId: string },
+): Promise<void> {
+  const cancelled = createEnvelope({
+    eventType: JOB_CANCELLED_EVENT_TYPE,
+    aggregateId: jobId,
+    correlationId: triggeringEnvelope.correlationId,
+    causationId: triggeringEnvelope.eventId,
+    schemaVersion: JOB_CANCELLED_SCHEMA_VERSION,
+    payload: {},
+  });
+
+  await publish(producer, { topic: JOBS_CANCELLED_TOPIC, key: jobId, value: cancelled });
 }

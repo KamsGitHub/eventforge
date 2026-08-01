@@ -1,4 +1,4 @@
-import type { JobHandler } from '../domain/job-handler.port';
+import type { JobExecutionContext, JobHandler } from '../domain/job-handler.port';
 
 export class UnknownJobTypeError extends Error {
   constructor(public readonly jobType: string) {
@@ -10,13 +10,13 @@ export class UnknownJobTypeError extends Error {
 export class ExecuteJobService {
   constructor(private readonly handlers: ReadonlyMap<string, JobHandler>) {}
 
-  async execute(jobType: string, payload: unknown): Promise<unknown> {
+  async execute(jobType: string, payload: unknown, context: JobExecutionContext): Promise<unknown> {
     const handler = this.handlers.get(jobType);
 
     if (!handler) {
       throw new UnknownJobTypeError(jobType);
     }
 
-    return handler.execute(payload);
+    return handler.execute(payload, context);
   }
 }

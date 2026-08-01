@@ -13,6 +13,9 @@ const payloadSchema = z.object({
 const SIMULATED_WORK_MS = 10;
 
 export class GenerateReportHandler implements JobHandler {
+  // Report generation is a single near-instant step with no natural "tick"
+  // to check cancellation between — see JobExecutionContext's docs for why
+  // that's a known limitation of simulated work, not unused for no reason.
   async execute(payload: unknown): Promise<unknown> {
     const { reportName } = payloadSchema.parse(payload);
 

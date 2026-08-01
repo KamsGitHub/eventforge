@@ -18,6 +18,7 @@ TOPICS=(
   jobs.retry-2
   jobs.retry-3
   jobs.dead-letter
+  jobs.cancelled
 )
 
 echo "Waiting for Kafka at ${BROKER}..."

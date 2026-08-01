@@ -6,6 +6,7 @@ import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
+import type { CancellationChecker } from '../domain/cancellation-checker.port';
 import { processJobRequestedBody } from './process-job-requested';
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -16,6 +17,7 @@ export interface RetryTierConsumerOptions {
   readonly executeJobService: ExecuteJobService;
   readonly prisma: PrismaClient;
   readonly tier: RetryTier;
+  readonly isJobCancelled?: CancellationChecker;
 }
 
 /**
@@ -27,12 +29,12 @@ export interface RetryTierConsumerOptions {
  * dead and trigger a rebalance during a long (tier-3) wait.
  */
 export async function startRetryTierConsumer(options: RetryTierConsumerOptions): Promise<Consumer> {
-  const { producer, executeJobService, tier, prisma } = options;
+  const { producer, executeJobService, tier, prisma, isJobCancelled } = options;
   const topic = RETRY_TIER_TOPICS[tier];
   const groupId = `eventforge.execution.retry-tier-${tier}-consumer`;
 
   const idempotentHandler = withIdempotency({ prisma, consumerName: groupId }, async (_payload, _tx, body) => {
-    await processJobRequestedBody(body, { producer, executeJobService });
+    await processJobRequestedBody(body, { producer, executeJobService, isJobCancelled });
   });
 
   return createConsumer(options.kafka, {
