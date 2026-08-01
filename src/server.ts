@@ -13,10 +13,14 @@ import {
   GenerateReportHandler,
 } from '@/modules/execution/domain/handlers/generate-report.handler';
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
+import { startRetryRouter } from '@/modules/execution/infrastructure/retry-router';
+import { startRetryTierConsumer } from '@/modules/execution/infrastructure/retry-tier.consumer';
 import { JobService } from '@/modules/jobs/application/job.service';
+import { startDeadLetterConsumer } from '@/modules/jobs/infrastructure/dead-letter.consumer';
 import { createJobOutboxPublishedHandler } from '@/modules/jobs/infrastructure/job-outbox-published.handler';
 import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status.consumer';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
+import { TimeoutWatchdog } from '@/modules/jobs/infrastructure/timeout-watchdog';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
 const config = loadConfig();
@@ -35,15 +39,33 @@ const outboxPublisher = new OutboxPublisher({
   onPublished: createJobOutboxPublishedHandler(jobRepository),
 });
 
+const timeoutWatchdog = new TimeoutWatchdog({
+  jobRepository,
+  producer,
+  timeoutMs: config.jobTimeoutMs,
+  pollIntervalMs: config.timeoutWatchdogPollIntervalMs,
+});
+
 let jobsRequestedConsumer: Consumer | undefined;
 let jobStatusConsumer: Consumer | undefined;
+let retryRouter: Consumer | undefined;
+let retryTier1Consumer: Consumer | undefined;
+let retryTier2Consumer: Consumer | undefined;
+let retryTier3Consumer: Consumer | undefined;
+let deadLetterConsumer: Consumer | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
 
   try {
+    timeoutWatchdog.stop();
     outboxPublisher.stop();
     await jobsRequestedConsumer?.disconnect();
+    await retryTier1Consumer?.disconnect();
+    await retryTier2Consumer?.disconnect();
+    await retryTier3Consumer?.disconnect();
+    await retryRouter?.disconnect();
+    await deadLetterConsumer?.disconnect();
     await jobStatusConsumer?.disconnect();
     await producer.disconnect();
     await app.close();
@@ -60,8 +82,14 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 async function start(): Promise<void> {
   await producer.connect();
   jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
+  retryTier1Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 1 });
+  retryTier2Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 2 });
+  retryTier3Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 3 });
+  retryRouter = await startRetryRouter({ kafka, producer, prisma, retryTierDelaysMs: config.retryTierDelaysMs });
+  deadLetterConsumer = await startDeadLetterConsumer({ kafka, jobRepository, prisma });
   jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });
   outboxPublisher.start();
+  timeoutWatchdog.start();
 
   const address = await app.listen({ port: app.config.port, host: '0.0.0.0' });
   app.log.info({ address }, 'server listening');
