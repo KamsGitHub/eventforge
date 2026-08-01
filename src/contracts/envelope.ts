@@ -16,6 +16,8 @@ export function envelopeSchema<PayloadSchema extends z.ZodType>(payloadSchema: P
     causationId: z.uuid().nullable(),
     occurredAt: z.iso.datetime(),
     schemaVersion: z.number().int().positive(),
+    /** Earliest instant this event may be acted on; null means "immediately". Drives tiered-retry delay (Milestone 11). */
+    notBefore: z.iso.datetime().nullable(),
     payload: payloadSchema,
   });
 }
@@ -28,6 +30,7 @@ export type Envelope<Payload> = Readonly<{
   causationId: string | null;
   occurredAt: string;
   schemaVersion: number;
+  notBefore: string | null;
   payload: Payload;
 }>;
 
@@ -40,6 +43,8 @@ export interface CreateEnvelopeInput<Payload> {
   readonly correlationId?: string;
   /** eventId of the event that triggered this one, if any. */
   readonly causationId?: string | null;
+  /** Earliest instant this event may be acted on; defaults to null ("immediately"). */
+  readonly notBefore?: string | null;
 }
 
 export function createEnvelope<Payload>(input: CreateEnvelopeInput<Payload>): Envelope<Payload> {
@@ -51,6 +56,7 @@ export function createEnvelope<Payload>(input: CreateEnvelopeInput<Payload>): En
     causationId: input.causationId ?? null,
     occurredAt: new Date().toISOString(),
     schemaVersion: input.schemaVersion,
+    notBefore: input.notBefore ?? null,
     payload: input.payload,
   };
 }

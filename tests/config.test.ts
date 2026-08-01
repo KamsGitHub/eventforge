@@ -13,6 +13,9 @@ describe('loadConfig', () => {
       databaseUrl: DATABASE_URL,
       kafkaBrokers: ['localhost:9092'],
       kafkaClientId: 'eventforge',
+      retryTierDelaysMs: { 1: 30_000, 2: 300_000, 3: 1_800_000 },
+      jobTimeoutMs: 300_000,
+      timeoutWatchdogPollIntervalMs: 30_000,
     });
   });
 
@@ -24,6 +27,11 @@ describe('loadConfig', () => {
       DATABASE_URL,
       KAFKA_BROKERS: 'broker-1:9092, broker-2:9092',
       KAFKA_CLIENT_ID: 'eventforge-worker',
+      RETRY_TIER_1_DELAY_MS: '1000',
+      RETRY_TIER_2_DELAY_MS: '2000',
+      RETRY_TIER_3_DELAY_MS: '3000',
+      JOB_TIMEOUT_MS: '60000',
+      TIMEOUT_WATCHDOG_POLL_INTERVAL_MS: '5000',
     });
 
     expect(config).toEqual({
@@ -33,6 +41,9 @@ describe('loadConfig', () => {
       databaseUrl: DATABASE_URL,
       kafkaBrokers: ['broker-1:9092', 'broker-2:9092'],
       kafkaClientId: 'eventforge-worker',
+      retryTierDelaysMs: { 1: 1000, 2: 2000, 3: 3000 },
+      jobTimeoutMs: 60_000,
+      timeoutWatchdogPollIntervalMs: 5000,
     });
   });
 

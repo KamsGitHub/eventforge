@@ -102,7 +102,7 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
       eventType: JOB_REQUESTED_EVENT_TYPE,
       aggregateId: 'job-success-1',
       schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
-      payload: { type: GENERATE_REPORT_JOB_TYPE, payload: { reportName: 'Q1 Revenue' }, maxAttempts: 3 },
+      payload: { type: GENERATE_REPORT_JOB_TYPE, payload: { reportName: 'Q1 Revenue' }, maxAttempts: 3, attempt: 1, failureHistory: [] },
     });
 
     await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });
@@ -126,7 +126,7 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
       aggregateId: 'job-failure-1',
       schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
       // Missing reportName — GenerateReportHandler rejects on invalid payload.
-      payload: { type: GENERATE_REPORT_JOB_TYPE, payload: {}, maxAttempts: 3 },
+      payload: { type: GENERATE_REPORT_JOB_TYPE, payload: {}, maxAttempts: 3, attempt: 1, failureHistory: [] },
     });
 
     await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });

@@ -7,6 +7,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().min(1).default('eventforge'),
+  RETRY_TIER_1_DELAY_MS: z.coerce.number().int().positive().default(30_000),
+  RETRY_TIER_2_DELAY_MS: z.coerce.number().int().positive().default(300_000),
+  RETRY_TIER_3_DELAY_MS: z.coerce.number().int().positive().default(1_800_000),
+  JOB_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  TIMEOUT_WATCHDOG_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 export type Config = Readonly<{
@@ -16,6 +21,9 @@ export type Config = Readonly<{
   databaseUrl: string;
   kafkaBrokers: readonly string[];
   kafkaClientId: string;
+  retryTierDelaysMs: Readonly<Record<1 | 2 | 3, number>>;
+  jobTimeoutMs: number;
+  timeoutWatchdogPollIntervalMs: number;
 }>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -32,5 +40,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: parsed.data.DATABASE_URL,
     kafkaBrokers: parsed.data.KAFKA_BROKERS.split(',').map((broker) => broker.trim()),
     kafkaClientId: parsed.data.KAFKA_CLIENT_ID,
+    retryTierDelaysMs: {
+      1: parsed.data.RETRY_TIER_1_DELAY_MS,
+      2: parsed.data.RETRY_TIER_2_DELAY_MS,
+      3: parsed.data.RETRY_TIER_3_DELAY_MS,
+    },
+    jobTimeoutMs: parsed.data.JOB_TIMEOUT_MS,
+    timeoutWatchdogPollIntervalMs: parsed.data.TIMEOUT_WATCHDOG_POLL_INTERVAL_MS,
   };
 }

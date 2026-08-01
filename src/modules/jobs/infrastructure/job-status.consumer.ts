@@ -2,7 +2,9 @@ import type { Consumer, Kafka } from 'kafkajs';
 
 import { jobCompletedEventSchemaV1 } from '@/contracts/events/job-completed.event';
 import { jobFailedEventSchemaV1 } from '@/contracts/events/job-failed.event';
+import { jobRequestedEventSchemaV1 } from '@/contracts/events/job-requested.event';
 import { jobStartedEventSchemaV1 } from '@/contracts/events/job-started.event';
+import { RETRY_TIER_TOPICS } from '@/contracts/retry-tier';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
@@ -12,6 +14,7 @@ import type { JobRepository } from '../domain/job-repository.port';
 const JOBS_STARTED_TOPIC = 'jobs.started';
 const JOBS_COMPLETED_TOPIC = 'jobs.completed';
 const JOBS_FAILED_TOPIC = 'jobs.failed';
+const RETRY_TOPICS = Object.values(RETRY_TIER_TOPICS);
 const CONSUMER_GROUP_ID = 'eventforge.jobs.job-status-consumer';
 
 export interface JobStatusConsumerOptions {
@@ -29,7 +32,7 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
   const { jobRepository } = options;
 
   return createConsumer(options.kafka, {
-    topic: [JOBS_STARTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC],
+    topic: [JOBS_STARTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC, ...RETRY_TOPICS],
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
     handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async ({ topic }, tx, body) => {
@@ -37,6 +40,15 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
       const job = aggregateId ? await jobRepository.findById(aggregateId, tx) : null;
 
       if (!job) {
+        return;
+      }
+
+      if (RETRY_TOPICS.includes(topic)) {
+        // A retry-tier dispatch means the job is being re-queued for
+        // execution — same FAILED -> QUEUED transition as a manual retry
+        // (M12), just automatically triggered.
+        jobRequestedEventSchemaV1.parse(body);
+        await jobRepository.update(job.transitionTo('QUEUED'), tx);
         return;
       }
 

@@ -50,7 +50,13 @@ export class JobService {
       aggregateId: job.props.id,
       correlationId: job.props.correlationId,
       schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
-      payload: { type: job.props.type, payload: job.props.payload, maxAttempts: job.props.maxAttempts },
+      payload: {
+        type: job.props.type,
+        payload: job.props.payload,
+        maxAttempts: job.props.maxAttempts,
+        attempt: 1,
+        failureHistory: [],
+      },
     });
 
     const outboxEvent: NewOutboxEvent = {
