@@ -16,6 +16,7 @@ export interface JobProps {
   readonly maxAttempts: number;
   readonly idempotencyKey: string | null;
   readonly correlationId: string;
+  readonly cancelRequested: boolean;
   readonly version: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -67,6 +68,7 @@ export class Job {
       maxAttempts: input.maxAttempts ?? 3,
       idempotencyKey: input.idempotencyKey ?? null,
       correlationId: input.correlationId,
+      cancelRequested: false,
       version: 0,
       createdAt: now,
       updatedAt: now,
@@ -105,12 +107,49 @@ export class Job {
         case 'DEAD_LETTERED':
           return { error: changes.error ?? this.jobProps.error, completedAt: now };
         case 'CANCELLED':
-          return { completedAt: now };
+          return { completedAt: now, cancelRequested: false };
         case 'PENDING':
           return {};
       }
     })();
 
     return new Job({ ...this.jobProps, ...patch, status: to, updatedAt: now });
+  }
+
+  /**
+   * Cancel is immediate from PENDING/QUEUED (a normal transition, enforced
+   * the same way as any other). From RUNNING it's cooperative: the job
+   * stays RUNNING with cancelRequested set, and whatever's executing it
+   * must observe the flag and stop itself — real cancellation of in-flight
+   * work needs a handler that polls between "ticks", which is a known
+   * limitation for simulated/instant handlers, not a bug here. Every other
+   * source state rejects outright rather than silently no-op'ing.
+   */
+  cancel(): Job {
+    if (this.jobProps.status === 'PENDING' || this.jobProps.status === 'QUEUED') {
+      return this.transitionTo('CANCELLED');
+    }
+
+    if (this.jobProps.status === 'RUNNING') {
+      return new Job({ ...this.jobProps, cancelRequested: true, updatedAt: new Date() });
+    }
+
+    throw new IllegalJobStateTransitionError(this.jobProps.status, 'CANCELLED');
+  }
+
+  /**
+   * Manual retry (user-initiated, from FAILED/DEAD_LETTERED) vs. the
+   * automatic retry-topic routing (Milestone 11) are conceptually distinct
+   * even though both eventually increment attempt — this only handles the
+   * former. The QUEUED transition itself never touches attempt; that still
+   * only happens at the next RUNNING transition, same as every other path
+   * back to QUEUED.
+   */
+  retry(): Job {
+    if (this.jobProps.status !== 'FAILED' && this.jobProps.status !== 'DEAD_LETTERED') {
+      throw new IllegalJobStateTransitionError(this.jobProps.status, 'QUEUED');
+    }
+
+    return this.transitionTo('QUEUED');
   }
 }

@@ -58,6 +58,13 @@ export class InMemoryJobRepository implements JobRepository {
     return Promise.resolve(updated);
   }
 
+  async updateWithOutboxEvent(job: Job, outboxEvent: NewOutboxEvent): Promise<Job> {
+    const updated = await this.update(job);
+    this.outboxEvents.push(outboxEvent);
+
+    return updated;
+  }
+
   private findByIdempotencyKeySync(idempotencyKey: string): Job | null {
     for (const job of this.jobsById.values()) {
       if (job.props.idempotencyKey === idempotencyKey) {

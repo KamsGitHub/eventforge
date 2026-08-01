@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { createEnvelope } from '@/contracts/envelope';
+import type { FailureRecord } from '@/contracts/events/failure-record';
 import { JOB_REQUESTED_EVENT_TYPE, JOB_REQUESTED_SCHEMA_VERSION } from '@/contracts/events/job-requested.event';
 import type { NewOutboxEvent } from '@/outbox/outbox.types';
 
@@ -45,27 +46,7 @@ export class JobService {
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
-    const requested = createEnvelope({
-      eventType: JOB_REQUESTED_EVENT_TYPE,
-      aggregateId: job.props.id,
-      correlationId: job.props.correlationId,
-      schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
-      payload: {
-        type: job.props.type,
-        payload: job.props.payload,
-        maxAttempts: job.props.maxAttempts,
-        attempt: 1,
-        failureHistory: [],
-      },
-    });
-
-    const outboxEvent: NewOutboxEvent = {
-      aggregateId: job.props.id,
-      eventType: JOB_REQUESTED_EVENT_TYPE,
-      topic: JOBS_REQUESTED_TOPIC,
-      messageKey: job.props.id,
-      payload: requested,
-    };
+    const outboxEvent = buildRequestedOutboxEvent(job, 1, []);
 
     try {
       return await this.jobs.createWithOutboxEvent(job, outboxEvent);
@@ -92,4 +73,64 @@ export class JobService {
 
     return this.jobs.list({ status: input.status, limit, offset });
   }
+
+  /**
+   * Immediate from PENDING/QUEUED; sets a cooperative cancelRequested flag
+   * (job stays RUNNING) from RUNNING; rejects with IllegalJobStateTransitionError
+   * from any terminal state. Job.cancel() enforces all of this — this method
+   * only wires it to the repository.
+   */
+  async cancelJob(id: string): Promise<Job | null> {
+    const job = await this.jobs.findById(id);
+
+    if (!job) {
+      return null;
+    }
+
+    return this.jobs.update(job.cancel());
+  }
+
+  /**
+   * Manual retry from FAILED/DEAD_LETTERED: inserts a fresh outbox
+   * JobRequested rather than replaying the old Kafka message — the retry
+   * router's automatic re-dispatch (Milestone 11) carries the accumulated
+   * failureHistory forward from the triggering event, but a manual retry
+   * has no such event to draw from, so it starts a fresh history from here.
+   */
+  async retryJob(id: string): Promise<Job | null> {
+    const job = await this.jobs.findById(id);
+
+    if (!job) {
+      return null;
+    }
+
+    const retried = job.retry();
+    const outboxEvent = buildRequestedOutboxEvent(retried, retried.props.attempt + 1, []);
+
+    return this.jobs.updateWithOutboxEvent(retried, outboxEvent);
+  }
+}
+
+function buildRequestedOutboxEvent(job: Job, attempt: number, failureHistory: readonly FailureRecord[]): NewOutboxEvent {
+  const requested = createEnvelope({
+    eventType: JOB_REQUESTED_EVENT_TYPE,
+    aggregateId: job.props.id,
+    correlationId: job.props.correlationId,
+    schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
+    payload: {
+      type: job.props.type,
+      payload: job.props.payload,
+      maxAttempts: job.props.maxAttempts,
+      attempt,
+      failureHistory,
+    },
+  });
+
+  return {
+    aggregateId: job.props.id,
+    eventType: JOB_REQUESTED_EVENT_TYPE,
+    topic: JOBS_REQUESTED_TOPIC,
+    messageKey: job.props.id,
+    payload: requested,
+  };
 }

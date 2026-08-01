@@ -45,4 +45,13 @@ export interface JobRepository {
    * to make this commit atomically with other writes in that transaction.
    */
   update(job: Job, client?: JobRepositoryClient): Promise<Job>;
+
+  /**
+   * Like `update()`, but also inserts `outboxEvent` in the same transaction
+   * — the status change and its delivery guarantee either both land or
+   * neither does. Used by manual retry (Milestone 12): re-queuing a
+   * FAILED/DEAD_LETTERED job inserts a fresh outbox JobRequested rather
+   * than replaying the old Kafka message.
+   */
+  updateWithOutboxEvent(job: Job, outboxEvent: NewOutboxEvent): Promise<Job>;
 }

@@ -33,6 +33,20 @@ const kafka = createKafkaClient({ brokers: config.kafkaBrokers, clientId: config
 const producer = createProducer(kafka);
 const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
 
+// Bridges execution's cancellation checks to the jobs module's own
+// repository without execution ever importing jobs' domain/infrastructure
+// directly — the composition root is allowed to reach across modules, the
+// modules themselves are not. Covers both cancellation paths: a job
+// cancelled immediately from PENDING/QUEUED is already status CANCELLED by
+// the time this is checked, while a RUNNING job stays RUNNING with only
+// cancelRequested set — a handler's cooperative mid-execution check needs
+// this to catch that second case too, not just the first.
+async function isJobCancelled(jobId: string): Promise<boolean> {
+  const job = await jobRepository.findById(jobId);
+
+  return job !== null && (job.props.status === 'CANCELLED' || job.props.cancelRequested);
+}
+
 const outboxPublisher = new OutboxPublisher({
   prisma,
   producer,
@@ -81,10 +95,10 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 async function start(): Promise<void> {
   await producer.connect();
-  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
-  retryTier1Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 1 });
-  retryTier2Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 2 });
-  retryTier3Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 3 });
+  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma, isJobCancelled });
+  retryTier1Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 1, isJobCancelled });
+  retryTier2Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 2, isJobCancelled });
+  retryTier3Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 3, isJobCancelled });
   retryRouter = await startRetryRouter({ kafka, producer, prisma, retryTierDelaysMs: config.retryTierDelaysMs });
   deadLetterConsumer = await startDeadLetterConsumer({ kafka, jobRepository, prisma });
   jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });

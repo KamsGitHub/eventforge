@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { JobService } from '../application/job.service';
+import { IllegalJobStateTransitionError } from '../domain/errors';
 
 import {
   CreateJobBodySchema,
@@ -82,6 +83,64 @@ export function registerJobRoutes(app: AppInstance, jobService: JobService): voi
       const jobs = await jobService.listJobs(request.query);
 
       await reply.send({ jobs: jobs.map(toJobResponse) });
+    },
+  );
+
+  server.post(
+    '/api/jobs/:jobId/cancel',
+    {
+      schema: {
+        params: JobParamsSchema,
+        response: { 200: JobResponseSchema, 404: ErrorResponseSchema, 409: ErrorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const job = await jobService.cancelJob(request.params.jobId);
+
+        if (!job) {
+          await reply.code(404).send({ error: `Job ${request.params.jobId} not found` });
+          return;
+        }
+
+        await reply.send(toJobResponse(job));
+      } catch (error) {
+        if (error instanceof IllegalJobStateTransitionError) {
+          await reply.code(409).send({ error: error.message });
+          return;
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  server.post(
+    '/api/jobs/:jobId/retry',
+    {
+      schema: {
+        params: JobParamsSchema,
+        response: { 200: JobResponseSchema, 404: ErrorResponseSchema, 409: ErrorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const job = await jobService.retryJob(request.params.jobId);
+
+        if (!job) {
+          await reply.code(404).send({ error: `Job ${request.params.jobId} not found` });
+          return;
+        }
+
+        await reply.send(toJobResponse(job));
+      } catch (error) {
+        if (error instanceof IllegalJobStateTransitionError) {
+          await reply.code(409).send({ error: error.message });
+          return;
+        }
+
+        throw error;
+      }
     },
   );
 }

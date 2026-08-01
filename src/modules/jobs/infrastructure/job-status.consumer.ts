@@ -1,10 +1,12 @@
 import type { Consumer, Kafka } from 'kafkajs';
 
+import { jobCancelledEventSchemaV1 } from '@/contracts/events/job-cancelled.event';
 import { jobCompletedEventSchemaV1 } from '@/contracts/events/job-completed.event';
 import { jobFailedEventSchemaV1 } from '@/contracts/events/job-failed.event';
 import { jobRequestedEventSchemaV1 } from '@/contracts/events/job-requested.event';
 import { jobStartedEventSchemaV1 } from '@/contracts/events/job-started.event';
 import { RETRY_TIER_TOPICS } from '@/contracts/retry-tier';
+import { JOBS_CANCELLED_TOPIC } from '@/contracts/topics';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
@@ -32,7 +34,7 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
   const { jobRepository } = options;
 
   return createConsumer(options.kafka, {
-    topic: [JOBS_STARTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC, ...RETRY_TOPICS],
+    topic: [JOBS_STARTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC, JOBS_CANCELLED_TOPIC, ...RETRY_TOPICS],
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
     handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async ({ topic }, tx, body) => {
@@ -66,6 +68,13 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
         case JOBS_FAILED_TOPIC: {
           const envelope = jobFailedEventSchemaV1.parse(body);
           await jobRepository.update(job.transitionTo('FAILED', { error: envelope.payload.error }), tx);
+          break;
+        }
+        case JOBS_CANCELLED_TOPIC: {
+          // The cooperative RUNNING cancellation path (Milestone 12):
+          // execution observed cancelRequested and stopped itself.
+          jobCancelledEventSchemaV1.parse(body);
+          await jobRepository.update(job.transitionTo('CANCELLED'), tx);
           break;
         }
       }

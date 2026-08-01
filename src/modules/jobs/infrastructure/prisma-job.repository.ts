@@ -18,6 +18,7 @@ function toProps(row: PrismaJobRow): JobProps {
     maxAttempts: row.maxAttempts,
     idempotencyKey: row.idempotencyKey,
     correlationId: row.correlationId,
+    cancelRequested: row.cancelRequested,
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -38,6 +39,7 @@ function toCreateInput(props: JobProps): Prisma.JobCreateInput {
     maxAttempts: props.maxAttempts,
     idempotencyKey: props.idempotencyKey,
     correlationId: props.correlationId,
+    cancelRequested: props.cancelRequested,
     version: props.version,
     createdAt: props.createdAt,
     updatedAt: props.updatedAt,
@@ -115,6 +117,19 @@ export class PrismaJobRepository implements JobRepository {
   }
 
   async update(job: Job, client: JobRepositoryClient = this.prisma): Promise<Job> {
+    return this.updateWithClient(job, client);
+  }
+
+  async updateWithOutboxEvent(job: Job, outboxEvent: NewOutboxEvent): Promise<Job> {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await this.updateWithClient(job, tx);
+      await insertOutboxEvent(tx, outboxEvent);
+
+      return updated;
+    });
+  }
+
+  private async updateWithClient(job: Job, client: JobRepositoryClient): Promise<Job> {
     const props = job.props;
 
     const { count } = await client.job.updateMany({
@@ -127,6 +142,7 @@ export class PrismaJobRepository implements JobRepository {
         attempt: props.attempt,
         maxAttempts: props.maxAttempts,
         correlationId: props.correlationId,
+        cancelRequested: props.cancelRequested,
         updatedAt: props.updatedAt,
         startedAt: props.startedAt,
         completedAt: props.completedAt,

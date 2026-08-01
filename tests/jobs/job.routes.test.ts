@@ -200,3 +200,164 @@ describe('GET /api/jobs', () => {
     await app.close();
   });
 });
+
+describe('POST /api/jobs/:jobId/cancel', () => {
+  it('cancels a PENDING job immediately', async () => {
+    const { app } = buildTestApp();
+
+    const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+    const jobId = created.json<JobResponse>().id;
+
+    const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/cancel` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<JobResponse>().status).toBe('CANCELLED');
+
+    await app.close();
+  });
+
+  it('cancels a QUEUED job immediately', async () => {
+    const { app, repository } = buildTestApp();
+
+    const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+    const jobId = created.json<JobResponse>().id;
+    const job = await repository.findById(jobId);
+    if (job) {
+      await repository.update(job.transitionTo('QUEUED'));
+    }
+
+    const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/cancel` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<JobResponse>().status).toBe('CANCELLED');
+
+    await app.close();
+  });
+
+  it('sets a cooperative cancelRequested flag and stays RUNNING for a RUNNING job', async () => {
+    const { app, repository } = buildTestApp();
+
+    const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+    const jobId = created.json<JobResponse>().id;
+    const job = await repository.findById(jobId);
+    if (job) {
+      await repository.update(job.transitionTo('QUEUED').transitionTo('RUNNING'));
+    }
+
+    const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/cancel` });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<JobResponse>();
+    expect(body.status).toBe('RUNNING');
+    expect(body.cancelRequested).toBe(true);
+
+    await app.close();
+  });
+
+  it.each(['SUCCEEDED', 'FAILED', 'DEAD_LETTERED', 'CANCELLED'] as const)(
+    'returns 409 when cancelling a %s job, rather than silently no-op-ing',
+    async (status) => {
+      const { app, repository } = buildTestApp();
+
+      const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+      const jobId = created.json<JobResponse>().id;
+      const job = await repository.findById(jobId);
+      if (job) {
+        const running = job.transitionTo('QUEUED').transitionTo('RUNNING');
+        const terminal =
+          status === 'FAILED'
+            ? running.transitionTo('FAILED', { error: 'boom' })
+            : status === 'DEAD_LETTERED'
+              ? running.transitionTo('FAILED', { error: 'boom' }).transitionTo('DEAD_LETTERED')
+              : running.transitionTo(status);
+        await repository.update(terminal);
+      }
+
+      const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/cancel` });
+
+      expect(response.statusCode).toBe(409);
+
+      await app.close();
+    },
+  );
+
+  it('returns 404 for an unknown job id', async () => {
+    const { app } = buildTestApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/jobs/00000000-0000-0000-0000-000000000000/cancel',
+    });
+
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+});
+
+describe('POST /api/jobs/:jobId/retry', () => {
+  it.each(['FAILED', 'DEAD_LETTERED'] as const)('retries a %s job back to QUEUED via a fresh outbox event', async (status) => {
+    const { app, repository } = buildTestApp();
+
+    const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+    const jobId = created.json<JobResponse>().id;
+    const job = await repository.findById(jobId);
+    if (job) {
+      const failed = job.transitionTo('QUEUED').transitionTo('RUNNING').transitionTo('FAILED', { error: 'boom' });
+      await repository.update(status === 'FAILED' ? failed : failed.transitionTo('DEAD_LETTERED'));
+    }
+
+    const outboxEventsBefore = repository.outboxEvents.length;
+    const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/retry` });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<JobResponse>();
+    expect(body.status).toBe('QUEUED');
+    expect(body.error).toBeNull();
+    expect(repository.outboxEvents.length).toBe(outboxEventsBefore + 1);
+
+    await app.close();
+  });
+
+  it.each(['PENDING', 'QUEUED', 'RUNNING', 'SUCCEEDED', 'CANCELLED'] as const)(
+    'returns 409 when retrying a %s job, rather than silently no-op-ing',
+    async (status) => {
+      const { app, repository } = buildTestApp();
+
+      const created = await app.inject({ method: 'POST', url: '/api/jobs', payload: { type: 'X', payload: {} } });
+      const jobId = created.json<JobResponse>().id;
+      const job = await repository.findById(jobId);
+      if (job && status !== 'PENDING') {
+        const queued = job.transitionTo('QUEUED');
+        const target =
+          status === 'QUEUED'
+            ? queued
+            : status === 'RUNNING'
+              ? queued.transitionTo('RUNNING')
+              : status === 'SUCCEEDED'
+                ? queued.transitionTo('RUNNING').transitionTo('SUCCEEDED', { result: {} })
+                : queued.transitionTo('CANCELLED');
+        await repository.update(target);
+      }
+
+      const response = await app.inject({ method: 'POST', url: `/api/jobs/${jobId}/retry` });
+
+      expect(response.statusCode).toBe(409);
+
+      await app.close();
+    },
+  );
+
+  it('returns 404 for an unknown job id', async () => {
+    const { app } = buildTestApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/jobs/00000000-0000-0000-0000-000000000000/retry',
+    });
+
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+});

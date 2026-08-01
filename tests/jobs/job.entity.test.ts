@@ -38,6 +38,7 @@ function buildJob(status: JobStatus, overrides: Partial<JobProps> = {}): Job {
     maxAttempts: 3,
     idempotencyKey: null,
     correlationId: 'corr-1',
+    cancelRequested: false,
     version: 0,
     createdAt: now,
     updatedAt: now,
@@ -185,5 +186,66 @@ describe('Job entity', () => {
         expect((error as IllegalJobStateTransitionError).to).toBe('QUEUED');
       }
     });
+  });
+
+  describe('cancel', () => {
+    it.each(['PENDING', 'QUEUED'] as const)('cancels %s immediately, transitioning straight to CANCELLED', (status) => {
+      const job = buildJob(status);
+
+      const cancelled = job.cancel();
+
+      expect(cancelled.props.status).toBe('CANCELLED');
+      expect(cancelled.props.cancelRequested).toBe(false);
+      expect(cancelled.props.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('sets cancelRequested and stays RUNNING when cancelling a RUNNING job', () => {
+      const job = buildJob('RUNNING', { cancelRequested: false });
+
+      const requested = job.cancel();
+
+      expect(requested.props.status).toBe('RUNNING');
+      expect(requested.props.cancelRequested).toBe(true);
+    });
+
+    it.each(['SUCCEEDED', 'FAILED', 'DEAD_LETTERED', 'CANCELLED'] as const)(
+      'rejects cancelling a %s job with a domain error rather than silently no-op-ing',
+      (status) => {
+        const job = buildJob(status);
+
+        expect(() => job.cancel()).toThrow(IllegalJobStateTransitionError);
+      },
+    );
+
+    it('does not mutate the original job (immutability)', () => {
+      const job = buildJob('RUNNING');
+
+      const requested = job.cancel();
+
+      expect(job.props.cancelRequested).toBe(false);
+      expect(requested.props.cancelRequested).toBe(true);
+      expect(requested).not.toBe(job);
+    });
+  });
+
+  describe('retry', () => {
+    it.each(['FAILED', 'DEAD_LETTERED'] as const)('requeues a %s job back to QUEUED', (status) => {
+      const job = buildJob(status, { error: 'boom', completedAt: new Date() });
+
+      const retried = job.retry();
+
+      expect(retried.props.status).toBe('QUEUED');
+      expect(retried.props.error).toBeNull();
+      expect(retried.props.completedAt).toBeNull();
+    });
+
+    it.each(['PENDING', 'QUEUED', 'RUNNING', 'SUCCEEDED', 'CANCELLED'] as const)(
+      'rejects retrying a %s job with a domain error rather than silently no-op-ing',
+      (status) => {
+        const job = buildJob(status);
+
+        expect(() => job.retry()).toThrow(IllegalJobStateTransitionError);
+      },
+    );
   });
 });

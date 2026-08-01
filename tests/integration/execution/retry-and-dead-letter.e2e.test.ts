@@ -33,6 +33,7 @@ const JOBS_RETRY_1_TOPIC = 'jobs.retry-1';
 const JOBS_RETRY_2_TOPIC = 'jobs.retry-2';
 const JOBS_RETRY_3_TOPIC = 'jobs.retry-3';
 const JOBS_DEAD_LETTER_TOPIC = 'jobs.dead-letter';
+const JOBS_CANCELLED_TOPIC = 'jobs.cancelled';
 
 const ALWAYS_FAIL_JOB_TYPE = 'ALWAYS_FAIL';
 
@@ -104,6 +105,7 @@ describe('retry tiers, dead-letter routing, and timeout watchdog (real Kafka + P
         JOBS_RETRY_2_TOPIC,
         JOBS_RETRY_3_TOPIC,
         JOBS_DEAD_LETTER_TOPIC,
+        JOBS_CANCELLED_TOPIC,
       ].map((topic) => ({ topic, numPartitions: 1, replicationFactor: 1 })),
     });
     await admin.disconnect();

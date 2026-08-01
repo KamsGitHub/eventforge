@@ -30,6 +30,7 @@ const JOBS_RETRY_1_TOPIC = 'jobs.retry-1';
 const JOBS_RETRY_2_TOPIC = 'jobs.retry-2';
 const JOBS_RETRY_3_TOPIC = 'jobs.retry-3';
 const JOBS_DEAD_LETTER_TOPIC = 'jobs.dead-letter';
+const JOBS_CANCELLED_TOPIC = 'jobs.cancelled';
 
 async function pollUntilTerminal(app: ReturnType<typeof buildApp>, jobId: string): Promise<JobResponse> {
   const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'DEAD_LETTERED']);
@@ -90,6 +91,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
         JOBS_RETRY_2_TOPIC,
         JOBS_RETRY_3_TOPIC,
         JOBS_DEAD_LETTER_TOPIC,
+        JOBS_CANCELLED_TOPIC,
       ].map((topic) => ({
         topic,
         numPartitions: 1,
