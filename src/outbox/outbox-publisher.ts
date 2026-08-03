@@ -2,6 +2,7 @@ import type { Producer } from 'kafkajs';
 
 import type { PrismaClient } from '@/db/prisma-client';
 import { publish } from '@/messaging/producer';
+import type { Logger } from '@/shared/logger';
 
 import { claimNextUnpublished, markFailed, markPublished } from './outbox.repository';
 import type { OutboxEventRow } from './outbox.types';
@@ -12,6 +13,7 @@ export interface OutboxPublisherOptions {
   readonly prisma: PrismaClient;
   readonly producer: Producer;
   readonly pollIntervalMs?: number;
+  readonly logger?: Logger;
   /**
    * Invoked once per row after it's confirmed published, outside the claim
    * transaction (best-effort — a crash between here and the caller's own
@@ -95,7 +97,7 @@ export class OutboxPublisher {
       }
 
       try {
-        await publish(this.options.producer, { topic: row.topic, key: row.messageKey, value: row.payload });
+        await publish(this.options.producer, { topic: row.topic, key: row.messageKey, value: row.payload, logger: this.options.logger });
         await markPublished(tx, row.id);
 
         return { row, failed: false };

@@ -3,6 +3,7 @@ import type { Producer } from 'kafkajs';
 import { createEnvelope } from '@/contracts/envelope';
 import { JOB_FAILED_EVENT_TYPE, JOB_FAILED_SCHEMA_VERSION } from '@/contracts/events/job-failed.event';
 import { publish } from '@/messaging/producer';
+import type { Logger } from '@/shared/logger';
 
 import type { Job } from '../domain/job.entity';
 import type { JobRepository } from '../domain/job-repository.port';
@@ -18,6 +19,7 @@ export interface TimeoutWatchdogOptions {
   /** How long a job may stay RUNNING before it's considered stuck. */
   readonly timeoutMs: number;
   readonly pollIntervalMs?: number;
+  readonly logger?: Logger;
 }
 
 /**
@@ -102,6 +104,6 @@ export class TimeoutWatchdog {
       },
     });
 
-    await publish(this.options.producer, { topic: JOBS_FAILED_TOPIC, key: job.props.id, value: failed });
+    await publish(this.options.producer, { topic: JOBS_FAILED_TOPIC, key: job.props.id, value: failed, logger: this.options.logger });
   }
 }

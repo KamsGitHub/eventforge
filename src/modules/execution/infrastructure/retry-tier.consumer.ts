@@ -4,6 +4,7 @@ import { RETRY_TIER_TOPICS, type RetryTier } from '@/contracts/retry-tier';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
+import type { Logger } from '@/shared/logger';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
 import type { CancellationChecker } from '../domain/cancellation-checker.port';
@@ -18,6 +19,7 @@ export interface RetryTierConsumerOptions {
   readonly prisma: PrismaClient;
   readonly tier: RetryTier;
   readonly isJobCancelled?: CancellationChecker;
+  readonly logger?: Logger;
 }
 
 /**
@@ -33,14 +35,15 @@ export async function startRetryTierConsumer(options: RetryTierConsumerOptions):
   const topic = RETRY_TIER_TOPICS[tier];
   const groupId = `eventforge.execution.retry-tier-${tier}-consumer`;
 
-  const idempotentHandler = withIdempotency({ prisma, consumerName: groupId }, async (_payload, _tx, body) => {
-    await processJobRequestedBody(body, { producer, executeJobService, isJobCancelled });
+  const idempotentHandler = withIdempotency({ prisma, consumerName: groupId }, async (payload, _tx, body) => {
+    await processJobRequestedBody(body, { producer, executeJobService, isJobCancelled, logger: payload.logger });
   });
 
   return createConsumer(options.kafka, {
     topic,
     groupId,
     autoCommit: false,
+    logger: options.logger,
     handler: async (payload) => {
       await waitUntilDue(payload);
       await idempotentHandler(payload);

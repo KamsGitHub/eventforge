@@ -1,8 +1,6 @@
-import type { EachMessagePayload } from 'kafkajs';
-
 import { Prisma, type PrismaClient } from '@/db/prisma-client';
 
-import type { MessageHandler } from './consumer';
+import type { MessageHandler, MessagePayloadWithLogger } from './consumer';
 
 export interface IdempotentConsumerOptions {
   readonly prisma: PrismaClient;
@@ -17,7 +15,7 @@ export interface IdempotentConsumerOptions {
  * pre-parsed as JSON (handlers still validate/narrow it with their own zod
  * schema).
  */
-export type IdempotentApply = (payload: EachMessagePayload, tx: Prisma.TransactionClient, body: unknown) => Promise<void>;
+export type IdempotentApply = (payload: MessagePayloadWithLogger, tx: Prisma.TransactionClient, body: unknown) => Promise<void>;
 
 /**
  * Wraps a business handler so redelivery of an already-applied event is a

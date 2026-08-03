@@ -7,6 +7,7 @@ import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
 import { publish } from '@/messaging/producer';
+import type { Logger } from '@/shared/logger';
 
 import { RETRY_TIER_TOPICS, tierForAttempt } from '@/contracts/retry-tier';
 
@@ -20,6 +21,7 @@ export interface RetryRouterOptions {
   readonly producer: Producer;
   readonly prisma: PrismaClient;
   readonly retryTierDelaysMs: Readonly<Record<1 | 2 | 3, number>>;
+  readonly logger?: Logger;
 }
 
 /**
@@ -36,11 +38,12 @@ export async function startRetryRouter(options: RetryRouterOptions): Promise<Con
     topic: JOBS_FAILED_TOPIC,
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
-    handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (_payload, _tx, body) => {
+    logger: options.logger,
+    handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (msg, _tx, body) => {
       const parsed = jobFailedEventSchemaV1.safeParse(body);
 
       if (!parsed.success) {
-        await publishMalformedMessageToDeadLetter(producer, body, parsed.error.message);
+        await publishMalformedMessageToDeadLetter(producer, body, parsed.error.message, msg.logger);
         return;
       }
 
@@ -49,17 +52,21 @@ export async function startRetryRouter(options: RetryRouterOptions): Promise<Con
       const { attempt, maxAttempts, type, payload, error, failureHistory } = envelope.payload;
 
       if (attempt >= maxAttempts) {
-        await publishDeadLetter(producer, {
-          jobId,
-          correlationId: envelope.correlationId,
-          causationId: envelope.eventId,
-          type,
-          payload,
-          attempt,
-          maxAttempts,
-          error,
-          failureHistory,
-        });
+        await publishDeadLetter(
+          producer,
+          {
+            jobId,
+            correlationId: envelope.correlationId,
+            causationId: envelope.eventId,
+            type,
+            payload,
+            attempt,
+            maxAttempts,
+            error,
+            failureHistory,
+          },
+          msg.logger,
+        );
         return;
       }
 
@@ -76,7 +83,7 @@ export async function startRetryRouter(options: RetryRouterOptions): Promise<Con
         payload: { type, payload, maxAttempts, attempt: attempt + 1, failureHistory },
       });
 
-      await publish(producer, { topic: RETRY_TIER_TOPICS[tier], key: jobId, value: retried });
+      await publish(producer, { topic: RETRY_TIER_TOPICS[tier], key: jobId, value: retried, logger: msg.logger });
     }),
   });
 }

@@ -10,6 +10,7 @@ import { JOBS_CANCELLED_TOPIC } from '@/contracts/topics';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
+import type { Logger } from '@/shared/logger';
 
 import type { JobRepository } from '../domain/job-repository.port';
 
@@ -23,6 +24,7 @@ export interface JobStatusConsumerOptions {
   readonly kafka: Kafka;
   readonly jobRepository: JobRepository;
   readonly prisma: PrismaClient;
+  readonly logger?: Logger;
 }
 
 /**
@@ -37,6 +39,7 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
     topic: [JOBS_STARTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC, JOBS_CANCELLED_TOPIC, ...RETRY_TOPICS],
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
+    logger: options.logger,
     handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async ({ topic }, tx, body) => {
       const aggregateId = (body as { aggregateId?: string }).aggregateId;
       const job = aggregateId ? await jobRepository.findById(aggregateId, tx) : null;

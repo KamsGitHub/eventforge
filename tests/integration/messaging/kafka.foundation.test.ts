@@ -8,6 +8,8 @@ import { createConsumer } from '@/messaging/consumer';
 import { createKafkaClient } from '@/messaging/kafka-client';
 import { createProducer, publish } from '@/messaging/producer';
 
+import { createCapturingLogger } from '../../helpers/capturing-logger';
+
 const PING_TOPIC = '_dev.ping';
 const pingEnvelopeSchema = envelopeSchema(z.object({ message: z.string() }));
 
@@ -80,6 +82,57 @@ describe('Kafka producer/consumer foundation (real broker via Testcontainers)', 
     expect(parsed.eventType).toBe('DevPing');
     expect(parsed.aggregateId).toBe('ping-1');
     expect(parsed.payload).toEqual({ message: 'hello' });
+
+    await consumer.disconnect();
+    consumer = undefined;
+  }, 120_000);
+
+  it('logs correlation fields automatically on publish and on consume, without the caller doing any logging itself (Milestone 13)', async () => {
+    const envelope = createEnvelope({
+      eventType: 'DevPing',
+      aggregateId: 'ping-2',
+      schemaVersion: 1,
+      payload: { message: 'hello again' },
+    });
+
+    const producerLog = createCapturingLogger();
+    const consumerLog = createCapturingLogger();
+
+    let resolveReceived!: () => void;
+    const received = new Promise<void>((resolve) => {
+      resolveReceived = resolve;
+    });
+
+    consumer = await createConsumer(kafka, {
+      topic: PING_TOPIC,
+      groupId: 'eventforge.dev.ping-consumer-logging',
+      logger: consumerLog.logger,
+      handler: () => {
+        resolveReceived();
+        return Promise.resolve();
+      },
+    });
+
+    await publish(producer, { topic: PING_TOPIC, key: envelope.aggregateId, value: envelope, logger: producerLog.logger });
+    await received;
+
+    const publishedLine = producerLog.lines().find((line) => line['correlationId'] === envelope.correlationId);
+    expect(publishedLine).toMatchObject({
+      msg: 'event published',
+      topic: PING_TOPIC,
+      eventId: envelope.eventId,
+      eventType: 'DevPing',
+      aggregateId: 'ping-2',
+    });
+
+    const consumedLine = consumerLog.lines().find((line) => line['correlationId'] === envelope.correlationId);
+    expect(consumedLine).toMatchObject({
+      msg: 'event consumed',
+      topic: PING_TOPIC,
+      eventId: envelope.eventId,
+      eventType: 'DevPing',
+      aggregateId: 'ping-2',
+    });
 
     await consumer.disconnect();
     consumer = undefined;

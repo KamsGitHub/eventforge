@@ -20,6 +20,7 @@ import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
+import { createCapturingLogger } from '../../helpers/capturing-logger';
 import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
 
 const JOBS_REQUESTED_TOPIC = 'jobs.requested';
@@ -62,6 +63,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
   let jobStatusConsumer: Consumer;
   let outboxPublisher: OutboxPublisher;
   let app: ReturnType<typeof buildApp>;
+  const kafkaSideLog = createCapturingLogger();
 
   beforeAll(async () => {
     dbContainer = await createTestDatabase();
@@ -110,13 +112,14 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     app = buildApp({ config, jobService });
 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
-    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
-    jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });
+    jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma, logger: kafkaSideLog.logger });
+    jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma, logger: kafkaSideLog.logger });
 
     outboxPublisher = new OutboxPublisher({
       prisma,
       producer,
       pollIntervalMs: 200,
+      logger: kafkaSideLog.logger,
       onPublished: createJobOutboxPublishedHandler(jobRepository),
     });
     outboxPublisher.start();
@@ -174,5 +177,49 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     expect(final.status).toBe('FAILED');
     expect(final.error).toEqual(expect.any(String));
     expect(final.startedAt).toEqual(expect.any(String));
+  }, 120_000);
+
+  it('reconstructs one job lifecycle in order by grepping the Kafka-side logs for its correlationId (Milestone 13)', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/jobs',
+      payload: { type: GENERATE_REPORT_JOB_TYPE, payload: { reportName: 'Correlation trace' } },
+    });
+
+    const job = created.json<JobResponse>();
+    const final = await pollUntilTerminal(app, job.id);
+    expect(final.status).toBe('SUCCEEDED');
+
+    const correlationId = job.correlationId;
+    const trace = kafkaSideLog.lines().filter((line) => line['correlationId'] === correlationId);
+
+    // The outbox publisher and both consumers (jobs-requested and
+    // job-status) log automatically via the messaging wrapper — nothing in
+    // this test, or in those modules, adds a single log call of its own.
+    const timeOf = (msg: string, topic: string): number => {
+      const line = trace.find((entry) => entry['msg'] === msg && entry['topic'] === topic);
+      expect(line).toBeDefined();
+      return line?.['time'] as number;
+    };
+
+    const publishedRequested = timeOf('event published', JOBS_REQUESTED_TOPIC);
+    const consumedRequested = timeOf('event consumed', JOBS_REQUESTED_TOPIC);
+    const publishedStarted = timeOf('event published', JOBS_STARTED_TOPIC);
+    const consumedStarted = timeOf('event consumed', JOBS_STARTED_TOPIC);
+    const publishedCompleted = timeOf('event published', JOBS_COMPLETED_TOPIC);
+    const consumedCompleted = timeOf('event consumed', JOBS_COMPLETED_TOPIC);
+
+    // Causal order only where it's actually guaranteed: within one
+    // consumer's synchronous handling of one message (publish precedes its
+    // own consumption; started precedes completed). job-status and
+    // jobs-requested are independent consumer groups with no ordering
+    // guarantee between them, so consumedStarted-vs-publishedCompleted is
+    // deliberately not asserted either way — see CLAUDE.md's "known,
+    // accepted race" note for M11/M12.
+    expect(publishedRequested).toBeLessThanOrEqual(consumedRequested);
+    expect(consumedRequested).toBeLessThanOrEqual(publishedStarted);
+    expect(publishedStarted).toBeLessThanOrEqual(consumedStarted);
+    expect(publishedStarted).toBeLessThanOrEqual(publishedCompleted);
+    expect(publishedCompleted).toBeLessThanOrEqual(consumedCompleted);
   }, 120_000);
 });

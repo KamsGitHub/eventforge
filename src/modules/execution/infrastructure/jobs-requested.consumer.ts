@@ -3,6 +3,7 @@ import type { Consumer, Kafka, Producer } from 'kafkajs';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
+import type { Logger } from '@/shared/logger';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
 import type { CancellationChecker } from '../domain/cancellation-checker.port';
@@ -17,6 +18,7 @@ export interface JobsRequestedConsumerOptions {
   readonly executeJobService: ExecuteJobService;
   readonly prisma: PrismaClient;
   readonly isJobCancelled?: CancellationChecker;
+  readonly logger?: Logger;
 }
 
 export async function startJobsRequestedConsumer(options: JobsRequestedConsumerOptions): Promise<Consumer> {
@@ -26,8 +28,9 @@ export async function startJobsRequestedConsumer(options: JobsRequestedConsumerO
     topic: JOBS_REQUESTED_TOPIC,
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
-    handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (_payload, _tx, body) => {
-      await processJobRequestedBody(body, { producer, executeJobService, isJobCancelled });
+    logger: options.logger,
+    handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (payload, _tx, body) => {
+      await processJobRequestedBody(body, { producer, executeJobService, isJobCancelled, logger: payload.logger });
     }),
   });
 }

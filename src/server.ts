@@ -28,6 +28,10 @@ const jobRepository = new PrismaJobRepository(prisma);
 const jobService = new JobService(jobRepository);
 
 const app = buildApp({ config, jobService });
+// Reused for all Kafka-side logging (consumers, producer publishes, outbox
+// publisher, watchdog) so every log line — HTTP and Kafka alike — comes
+// from the same pino instance/config rather than standing up a second one.
+const logger = app.log;
 
 const kafka = createKafkaClient({ brokers: config.kafkaBrokers, clientId: config.kafkaClientId });
 const producer = createProducer(kafka);
@@ -50,12 +54,14 @@ async function isJobCancelled(jobId: string): Promise<boolean> {
 const outboxPublisher = new OutboxPublisher({
   prisma,
   producer,
+  logger,
   onPublished: createJobOutboxPublishedHandler(jobRepository),
 });
 
 const timeoutWatchdog = new TimeoutWatchdog({
   jobRepository,
   producer,
+  logger,
   timeoutMs: config.jobTimeoutMs,
   pollIntervalMs: config.timeoutWatchdogPollIntervalMs,
 });
@@ -95,13 +101,13 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 async function start(): Promise<void> {
   await producer.connect();
-  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma, isJobCancelled });
-  retryTier1Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 1, isJobCancelled });
-  retryTier2Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 2, isJobCancelled });
-  retryTier3Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 3, isJobCancelled });
-  retryRouter = await startRetryRouter({ kafka, producer, prisma, retryTierDelaysMs: config.retryTierDelaysMs });
-  deadLetterConsumer = await startDeadLetterConsumer({ kafka, jobRepository, prisma });
-  jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma });
+  jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma, isJobCancelled, logger });
+  retryTier1Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 1, isJobCancelled, logger });
+  retryTier2Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 2, isJobCancelled, logger });
+  retryTier3Consumer = await startRetryTierConsumer({ kafka, producer, executeJobService, prisma, tier: 3, isJobCancelled, logger });
+  retryRouter = await startRetryRouter({ kafka, producer, prisma, retryTierDelaysMs: config.retryTierDelaysMs, logger });
+  deadLetterConsumer = await startDeadLetterConsumer({ kafka, jobRepository, prisma, logger });
+  jobStatusConsumer = await startJobStatusConsumer({ kafka, jobRepository, prisma, logger });
   outboxPublisher.start();
   timeoutWatchdog.start();
 

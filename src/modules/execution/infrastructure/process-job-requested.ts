@@ -8,6 +8,7 @@ import { jobRequestedEventSchemaV1 } from '@/contracts/events/job-requested.even
 import { JOB_STARTED_EVENT_TYPE, JOB_STARTED_SCHEMA_VERSION } from '@/contracts/events/job-started.event';
 import { JOBS_CANCELLED_TOPIC } from '@/contracts/topics';
 import { publish } from '@/messaging/producer';
+import { noopLogger, type Logger } from '@/shared/logger';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
 import type { CancellationChecker } from '../domain/cancellation-checker.port';
@@ -26,6 +27,8 @@ export interface ProcessJobRequestedDeps {
    * supplies one (see server.ts).
    */
   readonly isJobCancelled?: CancellationChecker;
+  /** Per-message child logger from the consumer wrapper, already bound to this event's correlation fields; falls back to a no-op for callers (mainly tests) that don't care. */
+  readonly logger?: Logger;
 }
 
 /**
@@ -40,10 +43,11 @@ export interface ProcessJobRequestedDeps {
  * a "retryable" failure in the first place.
  */
 export async function processJobRequestedBody(body: unknown, deps: ProcessJobRequestedDeps): Promise<void> {
+  const logger = deps.logger ?? noopLogger;
   const parsed = jobRequestedEventSchemaV1.safeParse(body);
 
   if (!parsed.success) {
-    await publishMalformedMessageToDeadLetter(deps.producer, body, parsed.error.message);
+    await publishMalformedMessageToDeadLetter(deps.producer, body, parsed.error.message, logger);
     return;
   }
 
@@ -69,7 +73,7 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
     payload: { attempt },
   });
 
-  await publish(deps.producer, { topic: JOBS_STARTED_TOPIC, key: jobId, value: started });
+  await publish(deps.producer, { topic: JOBS_STARTED_TOPIC, key: jobId, value: started, logger });
 
   const context = { isCancelled };
 
@@ -77,7 +81,7 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
     const result = await deps.executeJobService.execute(type, jobPayload, context);
 
     if (await isCancelled()) {
-      await publishCancelled(deps.producer, jobId, envelope);
+      await publishCancelled(deps.producer, jobId, envelope, logger);
       return;
     }
 
@@ -90,10 +94,10 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
       payload: { result },
     });
 
-    await publish(deps.producer, { topic: JOBS_COMPLETED_TOPIC, key: jobId, value: completed });
+    await publish(deps.producer, { topic: JOBS_COMPLETED_TOPIC, key: jobId, value: completed, logger });
   } catch (error) {
     if (await isCancelled()) {
-      await publishCancelled(deps.producer, jobId, envelope);
+      await publishCancelled(deps.producer, jobId, envelope, logger);
       return;
     }
 
@@ -115,7 +119,7 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
       },
     });
 
-    await publish(deps.producer, { topic: JOBS_FAILED_TOPIC, key: jobId, value: failed });
+    await publish(deps.producer, { topic: JOBS_FAILED_TOPIC, key: jobId, value: failed, logger });
   }
 }
 
@@ -123,6 +127,7 @@ async function publishCancelled(
   producer: Producer,
   jobId: string,
   triggeringEnvelope: { readonly eventId: string; readonly correlationId: string },
+  logger: Logger,
 ): Promise<void> {
   const cancelled = createEnvelope({
     eventType: JOB_CANCELLED_EVENT_TYPE,
@@ -133,5 +138,5 @@ async function publishCancelled(
     payload: {},
   });
 
-  await publish(producer, { topic: JOBS_CANCELLED_TOPIC, key: jobId, value: cancelled });
+  await publish(producer, { topic: JOBS_CANCELLED_TOPIC, key: jobId, value: cancelled, logger });
 }

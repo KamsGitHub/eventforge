@@ -1,6 +1,13 @@
 import type { Consumer, EachMessagePayload, Kafka } from 'kafkajs';
 
-export type MessageHandler = (payload: EachMessagePayload) => Promise<void>;
+import type { Logger } from '@/shared/logger';
+
+import { envelopeLogFields } from './envelope-log-fields';
+
+/** What every handler actually receives: the raw KafkaJS payload plus a per-message child logger bound to that message's correlation fields, when a base `logger` was given to createConsumer. */
+export type MessagePayloadWithLogger = EachMessagePayload & { readonly logger?: Logger };
+
+export type MessageHandler = (payload: MessagePayloadWithLogger) => Promise<void>;
 
 export interface ConsumerOptions {
   readonly topic: string | readonly string[];
@@ -16,6 +23,14 @@ export interface ConsumerOptions {
    * safe: it's the whole reason autoCommit is turned off here.
    */
   readonly autoCommit?: boolean;
+  /**
+   * When given, every consumed message is logged once (topic, partition,
+   * and the envelope's correlation fields), and `payload.logger` is a
+   * child of this logger bound to the same fields — handlers use it for
+   * any further logging so it stays attached to the message without every
+   * handler having to re-derive it.
+   */
+  readonly logger?: Logger;
 }
 
 export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Promise<Consumer> {
@@ -40,7 +55,19 @@ export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Pr
   await consumer.run({
     autoCommit,
     eachMessage: async (payload) => {
-      await options.handler(payload);
+      let messageLogger: Logger | undefined;
+
+      if (options.logger) {
+        const body: unknown = JSON.parse(payload.message.value?.toString() ?? '{}');
+        messageLogger = options.logger.child({
+          topic: payload.topic,
+          partition: payload.partition,
+          ...envelopeLogFields(body),
+        });
+        messageLogger.info({}, 'event consumed');
+      }
+
+      await options.handler({ ...payload, logger: messageLogger });
 
       if (!autoCommit) {
         const { topic, partition, message } = payload;

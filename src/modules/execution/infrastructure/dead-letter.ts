@@ -7,6 +7,7 @@ import { JOB_DEAD_LETTERED_EVENT_TYPE, JOB_DEAD_LETTERED_SCHEMA_VERSION } from '
 import type { FailureRecord } from '@/contracts/events/failure-record';
 import { JOBS_DEAD_LETTER_TOPIC } from '@/contracts/topics';
 import { publish } from '@/messaging/producer';
+import type { Logger } from '@/shared/logger';
 
 export interface DeadLetterInput {
   readonly jobId: string;
@@ -21,7 +22,7 @@ export interface DeadLetterInput {
 }
 
 /** Retries exhausted for a job whose identity/history we actually have (the normal path, driven by retry-router). */
-export async function publishDeadLetter(producer: Producer, input: DeadLetterInput): Promise<void> {
+export async function publishDeadLetter(producer: Producer, input: DeadLetterInput, logger?: Logger): Promise<void> {
   const envelope = createEnvelope({
     eventType: JOB_DEAD_LETTERED_EVENT_TYPE,
     aggregateId: input.jobId,
@@ -38,7 +39,7 @@ export async function publishDeadLetter(producer: Producer, input: DeadLetterInp
     },
   });
 
-  await publish(producer, { topic: JOBS_DEAD_LETTER_TOPIC, key: input.jobId, value: envelope });
+  await publish(producer, { topic: JOBS_DEAD_LETTER_TOPIC, key: input.jobId, value: envelope, logger });
 }
 
 /**
@@ -47,20 +48,29 @@ export async function publishDeadLetter(producer: Producer, input: DeadLetterInp
  * error would leave the offset uncommitted and retry forever, blocking the
  * partition on a message that can never parse successfully.
  */
-export async function publishMalformedMessageToDeadLetter(producer: Producer, rawBody: unknown, reason: string): Promise<void> {
+export async function publishMalformedMessageToDeadLetter(
+  producer: Producer,
+  rawBody: unknown,
+  reason: string,
+  logger?: Logger,
+): Promise<void> {
   const bodyRecord = isRecord(rawBody) ? rawBody : null;
   const aggregateId = typeof bodyRecord?.['aggregateId'] === 'string' ? bodyRecord['aggregateId'] : randomUUID();
   const nestedPayload = isRecord(bodyRecord?.['payload']) ? bodyRecord['payload'] : null;
 
-  await publishDeadLetter(producer, {
-    jobId: aggregateId,
-    type: typeof nestedPayload?.['type'] === 'string' ? nestedPayload['type'] : null,
-    payload: nestedPayload?.['payload'] ?? null,
-    attempt: 0,
-    maxAttempts: 0,
-    error: `malformed message: ${reason}`,
-    failureHistory: [],
-  });
+  await publishDeadLetter(
+    producer,
+    {
+      jobId: aggregateId,
+      type: typeof nestedPayload?.['type'] === 'string' ? nestedPayload['type'] : null,
+      payload: nestedPayload?.['payload'] ?? null,
+      attempt: 0,
+      maxAttempts: 0,
+      error: `malformed message: ${reason}`,
+      failureHistory: [],
+    },
+    logger,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

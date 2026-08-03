@@ -5,6 +5,7 @@ import { JOBS_DEAD_LETTER_TOPIC } from '@/contracts/topics';
 import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
+import type { Logger } from '@/shared/logger';
 
 import type { JobRepository } from '../domain/job-repository.port';
 
@@ -14,6 +15,7 @@ export interface DeadLetterConsumerOptions {
   readonly kafka: Kafka;
   readonly jobRepository: JobRepository;
   readonly prisma: PrismaClient;
+  readonly logger?: Logger;
 }
 
 /**
@@ -30,6 +32,7 @@ export async function startDeadLetterConsumer(options: DeadLetterConsumerOptions
     topic: JOBS_DEAD_LETTER_TOPIC,
     groupId: CONSUMER_GROUP_ID,
     autoCommit: false,
+    logger: options.logger,
     handler: withIdempotency({ prisma: options.prisma, consumerName: CONSUMER_GROUP_ID }, async (_payload, tx, body) => {
       const envelope = jobDeadLetteredEventSchemaV1.parse(body);
       const job = await jobRepository.findById(envelope.aggregateId, tx);
