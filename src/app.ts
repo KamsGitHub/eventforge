@@ -1,9 +1,11 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
+import type pino from 'pino';
 
 import { loadConfig, type Config } from '@/config/env';
 import { registerJobRoutes } from '@/modules/jobs/api/routes';
 import type { JobService } from '@/modules/jobs/application/job.service';
+import { generateCorrelationId } from '@/shared/correlation-plugin';
 import { createLogger } from '@/shared/logger';
 
 declare module 'fastify' {
@@ -15,13 +17,16 @@ declare module 'fastify' {
 export interface BuildAppDeps {
   readonly config?: Config;
   readonly jobService: JobService;
+  /** Overrides the pino instance createLogger(config) would otherwise build — lets tests capture output (e.g. asserting a correlationId reaches the access log) via a custom destination stream. */
+  readonly logger?: pino.Logger;
 }
 
 export function buildApp(deps: BuildAppDeps) {
   const config = deps.config ?? loadConfig();
 
   const app = Fastify({
-    loggerInstance: createLogger(config),
+    loggerInstance: deps.logger ?? createLogger(config),
+    genReqId: generateCorrelationId,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

@@ -45,7 +45,7 @@ export function registerJobRoutes(app: AppInstance, jobService: JobService): voi
       const idempotencyKeyHeader = request.headers['idempotency-key'];
       const idempotencyKey = typeof idempotencyKeyHeader === 'string' ? idempotencyKeyHeader : undefined;
 
-      const job = await jobService.createJob({ ...request.body, idempotencyKey });
+      const job = await jobService.createJob({ ...request.body, idempotencyKey, correlationId: request.id });
 
       await reply.code(201).send(toJobResponse(job));
     },

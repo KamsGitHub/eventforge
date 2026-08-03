@@ -16,6 +16,8 @@ export interface CreateJobInput {
   readonly type: string;
   readonly payload: unknown;
   readonly idempotencyKey?: string | undefined;
+  /** Carried through to the JobRequested envelope so the HTTP request that created this job is traceable through every Kafka hop; generated if omitted (e.g. a test or script creating a job directly). */
+  readonly correlationId?: string | undefined;
 }
 
 export interface ListJobsInput {
@@ -42,7 +44,7 @@ export class JobService {
     const job = Job.createNew({
       type: input.type,
       payload: input.payload,
-      correlationId: randomUUID(),
+      correlationId: input.correlationId ?? randomUUID(),
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
