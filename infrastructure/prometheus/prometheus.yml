@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: eventforge
+    metrics_path: /metrics
+    static_configs:
+      # The app runs on the host (npm run dev), not inside this compose
+      # network — host.docker.internal is wired up via extra_hosts below so
+      # this resolves on Linux too, not just Docker Desktop.
+      - targets: ['host.docker.internal:3000']
