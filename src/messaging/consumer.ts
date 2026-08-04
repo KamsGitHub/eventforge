@@ -31,10 +31,23 @@ export interface ConsumerOptions {
    * handler having to re-derive it.
    */
   readonly logger?: Logger;
+  /**
+   * Passed straight through to KafkaJS's consumer constructor. Left
+   * undefined (KafkaJS's own defaults) in every production call site;
+   * exists so tests exercising real rebalance behavior can shorten the
+   * broker's failure-detection window instead of waiting out the ~30s
+   * default.
+   */
+  readonly sessionTimeout?: number;
+  readonly heartbeatInterval?: number;
 }
 
 export async function createConsumer(kafka: Kafka, options: ConsumerOptions): Promise<Consumer> {
-  const consumer = kafka.consumer({ groupId: options.groupId });
+  const consumer = kafka.consumer({
+    groupId: options.groupId,
+    sessionTimeout: options.sessionTimeout,
+    heartbeatInterval: options.heartbeatInterval,
+  });
 
   const topics = typeof options.topic === 'string' ? [options.topic] : options.topic;
   const autoCommit = options.autoCommit ?? true;
