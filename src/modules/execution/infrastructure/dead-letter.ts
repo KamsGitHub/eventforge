@@ -8,6 +8,7 @@ import type { FailureRecord } from '@/contracts/events/failure-record';
 import { JOBS_DEAD_LETTER_TOPIC } from '@/contracts/topics';
 import { publish } from '@/messaging/producer';
 import type { Logger } from '@/shared/logger';
+import { deadLetterTotal } from '@/shared/metrics';
 
 export interface DeadLetterInput {
   readonly jobId: string;
@@ -40,6 +41,7 @@ export async function publishDeadLetter(producer: Producer, input: DeadLetterInp
   });
 
   await publish(producer, { topic: JOBS_DEAD_LETTER_TOPIC, key: input.jobId, value: envelope, logger });
+  deadLetterTotal.inc();
 }
 
 /**

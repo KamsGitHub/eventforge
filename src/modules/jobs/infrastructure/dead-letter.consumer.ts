@@ -6,6 +6,7 @@ import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
 import type { Logger } from '@/shared/logger';
+import { jobsTotal } from '@/shared/metrics';
 
 import type { JobRepository } from '../domain/job-repository.port';
 
@@ -42,6 +43,7 @@ export async function startDeadLetterConsumer(options: DeadLetterConsumerOptions
       }
 
       await jobRepository.update(job.transitionTo('DEAD_LETTERED', { error: envelope.payload.error }), tx);
+      jobsTotal.inc({ status: 'DEAD_LETTERED' });
     }),
   });
 }

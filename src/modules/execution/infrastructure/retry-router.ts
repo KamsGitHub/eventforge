@@ -8,6 +8,7 @@ import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
 import { publish } from '@/messaging/producer';
 import type { Logger } from '@/shared/logger';
+import { retryTotal } from '@/shared/metrics';
 
 import { RETRY_TIER_TOPICS, tierForAttempt } from '@/contracts/retry-tier';
 
@@ -84,6 +85,7 @@ export async function startRetryRouter(options: RetryRouterOptions): Promise<Con
       });
 
       await publish(producer, { topic: RETRY_TIER_TOPICS[tier], key: jobId, value: retried, logger: msg.logger });
+      retryTotal.inc({ tier: String(tier) });
     }),
   });
 }

@@ -7,6 +7,7 @@ import { registerJobRoutes } from '@/modules/jobs/api/routes';
 import type { JobService } from '@/modules/jobs/application/job.service';
 import { generateCorrelationId } from '@/shared/correlation-plugin';
 import { createLogger } from '@/shared/logger';
+import { metricsRegistry } from '@/shared/metrics';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -35,6 +36,11 @@ export function buildApp(deps: BuildAppDeps) {
   app.decorate('config', config);
 
   app.get('/health', () => ({ status: 'ok' }));
+
+  app.get('/metrics', async (_request, reply) => {
+    reply.header('Content-Type', metricsRegistry.contentType);
+    return metricsRegistry.metrics();
+  });
 
   registerJobRoutes(app, deps.jobService);
 

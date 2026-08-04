@@ -9,6 +9,7 @@ import { JOB_STARTED_EVENT_TYPE, JOB_STARTED_SCHEMA_VERSION } from '@/contracts/
 import { JOBS_CANCELLED_TOPIC } from '@/contracts/topics';
 import { publish } from '@/messaging/producer';
 import { noopLogger, type Logger } from '@/shared/logger';
+import { jobDurationSeconds } from '@/shared/metrics';
 
 import type { ExecuteJobService } from '../application/execute-job.service';
 import type { CancellationChecker } from '../domain/cancellation-checker.port';
@@ -76,11 +77,17 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
   await publish(deps.producer, { topic: JOBS_STARTED_TOPIC, key: jobId, value: started, logger });
 
   const context = { isCancelled };
+  const executionStartedAt = process.hrtime.bigint();
+  const observeDuration = (outcome: 'succeeded' | 'failed' | 'cancelled'): void => {
+    const seconds = Number(process.hrtime.bigint() - executionStartedAt) / 1e9;
+    jobDurationSeconds.observe({ type, outcome }, seconds);
+  };
 
   try {
     const result = await deps.executeJobService.execute(type, jobPayload, context);
 
     if (await isCancelled()) {
+      observeDuration('cancelled');
       await publishCancelled(deps.producer, jobId, envelope, logger);
       return;
     }
@@ -95,8 +102,10 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
     });
 
     await publish(deps.producer, { topic: JOBS_COMPLETED_TOPIC, key: jobId, value: completed, logger });
+    observeDuration('succeeded');
   } catch (error) {
     if (await isCancelled()) {
+      observeDuration('cancelled');
       await publishCancelled(deps.producer, jobId, envelope, logger);
       return;
     }
@@ -120,6 +129,7 @@ export async function processJobRequestedBody(body: unknown, deps: ProcessJobReq
     });
 
     await publish(deps.producer, { topic: JOBS_FAILED_TOPIC, key: jobId, value: failed, logger });
+    observeDuration('failed');
   }
 }
 

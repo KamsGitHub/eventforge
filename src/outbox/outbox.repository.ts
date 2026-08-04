@@ -58,3 +58,7 @@ export async function markFailed(tx: Prisma.TransactionClient, id: string, error
     data: { publishingAttempts: { increment: 1 }, lastError: error },
   });
 }
+
+export async function countUnpublished(client: Client): Promise<number> {
+  return client.outboxEvent.count({ where: { publishedAt: null } });
+}

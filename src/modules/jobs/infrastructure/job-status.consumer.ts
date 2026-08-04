@@ -11,6 +11,7 @@ import type { PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
 import { withIdempotency } from '@/messaging/idempotent-consumer';
 import type { Logger } from '@/shared/logger';
+import { jobsTotal } from '@/shared/metrics';
 
 import type { JobRepository } from '../domain/job-repository.port';
 
@@ -54,6 +55,7 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
         // (M12), just automatically triggered.
         jobRequestedEventSchemaV1.parse(body);
         await jobRepository.update(job.transitionTo('QUEUED'), tx);
+        jobsTotal.inc({ status: 'QUEUED' });
         return;
       }
 
@@ -61,16 +63,19 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
         case JOBS_STARTED_TOPIC: {
           jobStartedEventSchemaV1.parse(body);
           await jobRepository.update(job.transitionTo('RUNNING'), tx);
+          jobsTotal.inc({ status: 'RUNNING' });
           break;
         }
         case JOBS_COMPLETED_TOPIC: {
           const envelope = jobCompletedEventSchemaV1.parse(body);
           await jobRepository.update(job.transitionTo('SUCCEEDED', { result: envelope.payload.result }), tx);
+          jobsTotal.inc({ status: 'SUCCEEDED' });
           break;
         }
         case JOBS_FAILED_TOPIC: {
           const envelope = jobFailedEventSchemaV1.parse(body);
           await jobRepository.update(job.transitionTo('FAILED', { error: envelope.payload.error }), tx);
+          jobsTotal.inc({ status: 'FAILED' });
           break;
         }
         case JOBS_CANCELLED_TOPIC: {
@@ -78,6 +83,7 @@ export async function startJobStatusConsumer(options: JobStatusConsumerOptions):
           // execution observed cancelRequested and stopped itself.
           jobCancelledEventSchemaV1.parse(body);
           await jobRepository.update(job.transitionTo('CANCELLED'), tx);
+          jobsTotal.inc({ status: 'CANCELLED' });
           break;
         }
       }

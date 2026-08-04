@@ -19,6 +19,7 @@ import { createJobOutboxPublishedHandler } from '@/modules/jobs/infrastructure/j
 import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status.consumer';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
+import { jobsTotal } from '@/shared/metrics';
 
 import { createCapturingLogger } from '../../helpers/capturing-logger';
 import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
@@ -159,6 +160,12 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     expect(final.result).toMatchObject({ reportName: 'Q1 Revenue' });
     expect(final.startedAt).toEqual(expect.any(String));
     expect(final.completedAt).toEqual(expect.any(String));
+
+    // job-status.consumer.ts (the sole writer of Job.status) increments
+    // jobs_total once per transition it applies — SUCCEEDED here confirms
+    // the Milestone 14 instrumentation is actually wired into that path.
+    const succeededSample = (await jobsTotal.get()).values.find((value) => value.labels.status === 'SUCCEEDED');
+    expect(succeededSample?.value).toBeGreaterThanOrEqual(1);
   }, 120_000);
 
   it('runs a failing job through the full spec workflow, ending in FAILED', async () => {

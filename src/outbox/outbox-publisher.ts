@@ -3,8 +3,9 @@ import type { Producer } from 'kafkajs';
 import type { PrismaClient } from '@/db/prisma-client';
 import { publish } from '@/messaging/producer';
 import type { Logger } from '@/shared/logger';
+import { outboxBacklog } from '@/shared/metrics';
 
-import { claimNextUnpublished, markFailed, markPublished } from './outbox.repository';
+import { claimNextUnpublished, countUnpublished, markFailed, markPublished } from './outbox.repository';
 import type { OutboxEventRow } from './outbox.types';
 
 const DEFAULT_POLL_INTERVAL_MS = 500;
@@ -81,6 +82,11 @@ export class OutboxPublisher {
         published += 1;
         await this.options.onPublished?.(result.row);
       }
+
+      // Reuses this same poll cycle rather than a separate, more frequent
+      // one — an extra tight polling loop would add its own load to the
+      // same table under stress, which is exactly the mistake to avoid here.
+      outboxBacklog.set(await countUnpublished(this.options.prisma));
 
       return published;
     } finally {
