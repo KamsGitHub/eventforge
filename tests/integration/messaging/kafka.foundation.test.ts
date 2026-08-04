@@ -67,7 +67,7 @@ describe('Kafka producer/consumer foundation (real broker via Testcontainers)', 
 
     await consumer.disconnect();
     consumer = undefined;
-  }, 120_000);
+  }, 180_000);
 
   it('logs correlation fields automatically on publish and on consume, without the caller doing any logging itself (Milestone 13)', async () => {
     const envelope = createEnvelope({
@@ -118,5 +118,5 @@ describe('Kafka producer/consumer foundation (real broker via Testcontainers)', 
 
     await consumer.disconnect();
     consumer = undefined;
-  }, 120_000);
+  }, 180_000);
 });
