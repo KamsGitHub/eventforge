@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { EachMessagePayload, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { createPrismaClient, type PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
@@ -10,7 +8,7 @@ import { withIdempotency } from '@/messaging/idempotent-consumer';
 import { createKafkaClient } from '@/messaging/kafka-client';
 import { createProducer, publish } from '@/messaging/producer';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const CONSUMER_NAME = 'test.idempotent-consumer';
 const RESTART_TOPIC = '_dev.idempotent-consumer-restart';
@@ -33,18 +31,15 @@ function buildPayload(body: unknown, offset: string): EachMessagePayload {
 }
 
 describe('withIdempotency (real Postgres via Testcontainers)', () => {
-  let db: TestDatabase;
   let prisma: PrismaClient;
 
-  beforeAll(async () => {
-    db = await createTestDatabase();
-    prisma = createPrismaClient(db.connectionUri);
-  }, 120_000);
+  beforeAll(() => {
+    prisma = createPrismaClient(sharedDatabaseUrl());
+  });
 
   afterAll(async () => {
     await prisma?.$disconnect();
-    await db?.container.stop();
-  }, 120_000);
+  });
 
   afterEach(async () => {
     await prisma.processedEvent.deleteMany();
@@ -117,25 +112,13 @@ describe('withIdempotency (real Postgres via Testcontainers)', () => {
 });
 
 describe('idempotent consumer restart (real Postgres + Kafka via Testcontainers)', () => {
-  let db: TestDatabase;
   let prisma: PrismaClient;
-  let kafkaContainer: StartedKafkaContainer;
   let kafka: Kafka;
   let producer: Producer;
 
   beforeAll(async () => {
-    db = await createTestDatabase();
-    prisma = createPrismaClient(db.connectionUri);
-
-    kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     const admin = kafka.admin();
     await admin.connect();
@@ -144,14 +127,12 @@ describe('idempotent consumer restart (real Postgres + Kafka via Testcontainers)
 
     producer = createProducer(kafka);
     await producer.connect();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     await producer?.disconnect();
     await prisma?.$disconnect();
-    await kafkaContainer?.stop();
-    await db?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
   afterEach(async () => {
     await prisma.processedEvent.deleteMany();

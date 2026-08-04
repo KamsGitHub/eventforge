@@ -16,6 +16,8 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:unit": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --selectProjects unit",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --selectProjects integration",
     "boundaries": "depcruise --config .dependency-cruiser.cjs src"
   },
   "devDependencies": {

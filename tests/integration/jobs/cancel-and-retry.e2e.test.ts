@@ -1,6 +1,4 @@
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { Consumer, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { buildApp } from '@/app';
 import { loadConfig } from '@/config/env';
@@ -20,17 +18,7 @@ import { startJobStatusConsumer } from '@/modules/jobs/infrastructure/job-status
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
-
-const JOBS_REQUESTED_TOPIC = 'jobs.requested';
-const JOBS_STARTED_TOPIC = 'jobs.started';
-const JOBS_COMPLETED_TOPIC = 'jobs.completed';
-const JOBS_FAILED_TOPIC = 'jobs.failed';
-const JOBS_RETRY_1_TOPIC = 'jobs.retry-1';
-const JOBS_RETRY_2_TOPIC = 'jobs.retry-2';
-const JOBS_RETRY_3_TOPIC = 'jobs.retry-3';
-const JOBS_DEAD_LETTER_TOPIC = 'jobs.dead-letter';
-const JOBS_CANCELLED_TOPIC = 'jobs.cancelled';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const TOGGLEABLE_JOB_TYPE = 'TOGGLEABLE';
 const TICKING_JOB_TYPE = 'TICKING';
@@ -86,8 +74,6 @@ async function pollUntil(
 }
 
 describe('cancellation and manual retry end-to-end (real Kafka + Postgres via Testcontainers)', () => {
-  let dbContainer: TestDatabase;
-  let kafkaContainer: StartedKafkaContainer;
   let prisma: PrismaClient;
   let kafka: Kafka;
   let producer: Producer;
@@ -105,35 +91,8 @@ describe('cancellation and manual retry end-to-end (real Kafka + Postgres via Te
   let outboxPublisher: OutboxPublisher;
 
   beforeAll(async () => {
-    dbContainer = await createTestDatabase();
-    prisma = createPrismaClient(dbContainer.connectionUri);
-
-    kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
-
-    const admin = kafka.admin();
-    await admin.connect();
-    await admin.createTopics({
-      topics: [
-        JOBS_REQUESTED_TOPIC,
-        JOBS_STARTED_TOPIC,
-        JOBS_COMPLETED_TOPIC,
-        JOBS_FAILED_TOPIC,
-        JOBS_RETRY_1_TOPIC,
-        JOBS_RETRY_2_TOPIC,
-        JOBS_RETRY_3_TOPIC,
-        JOBS_DEAD_LETTER_TOPIC,
-        JOBS_CANCELLED_TOPIC,
-      ].map((topic) => ({ topic, numPartitions: 1, replicationFactor: 1 })),
-    });
-    await admin.disconnect();
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     producer = createProducer(kafka);
     await producer.connect();
@@ -141,7 +100,7 @@ describe('cancellation and manual retry end-to-end (real Kafka + Postgres via Te
     jobRepository = new PrismaJobRepository(prisma);
     const jobService = new JobService(jobRepository);
 
-    const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: dbContainer.connectionUri });
+    const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: sharedDatabaseUrl() });
     app = buildApp({ config, jobService });
 
     toggleableHandler = new ToggleableHandler();
@@ -175,7 +134,7 @@ describe('cancellation and manual retry end-to-end (real Kafka + Postgres via Te
       onPublished: createJobOutboxPublishedHandler(jobRepository),
     });
     outboxPublisher.start();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     outboxPublisher?.stop();
@@ -189,9 +148,7 @@ describe('cancellation and manual retry end-to-end (real Kafka + Postgres via Te
     await jobStatusConsumer?.disconnect();
     await producer?.disconnect();
     await prisma?.$disconnect();
-    await kafkaContainer?.stop();
-    await dbContainer?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
   afterEach(async () => {
     await prisma.job.deleteMany();

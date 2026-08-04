@@ -3,23 +3,20 @@ import { JobVersionConflictError } from '@/modules/jobs/domain/errors';
 import { Job } from '@/modules/jobs/domain/job.entity';
 import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.repository';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl } from '../setup';
 
 describe('PrismaJobRepository (real Postgres via Testcontainers)', () => {
-  let db: TestDatabase;
   let prisma: PrismaClient;
   let repository: PrismaJobRepository;
 
-  beforeAll(async () => {
-    db = await createTestDatabase();
-    prisma = createPrismaClient(db.connectionUri);
+  beforeAll(() => {
+    prisma = createPrismaClient(sharedDatabaseUrl());
     repository = new PrismaJobRepository(prisma);
-  }, 120_000);
+  });
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await db.container.stop();
-  }, 30_000);
+  });
 
   afterEach(async () => {
     await prisma.job.deleteMany();

@@ -1,6 +1,4 @@
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { Consumer, EachMessagePayload, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { createPrismaClient, type PrismaClient } from '@/db/prisma-client';
 import { createConsumer } from '@/messaging/consumer';
@@ -9,33 +7,19 @@ import { createProducer, publish } from '@/messaging/producer';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
 import { claimNextUnpublished, insertOutboxEvent, markPublished } from '@/outbox/outbox.repository';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const CONCURRENT_CLAIM_TOPIC = '_dev.outbox-concurrent-claim';
 const CRASH_RECOVERY_TOPIC = '_dev.outbox-crash-recovery';
 
 describe('OutboxPublisher (real Postgres + Kafka via Testcontainers)', () => {
-  let db: TestDatabase;
   let prisma: PrismaClient;
-  let kafkaContainer: StartedKafkaContainer;
   let kafka: Kafka;
   let producer: Producer;
 
   beforeAll(async () => {
-    db = await createTestDatabase();
-    prisma = createPrismaClient(db.connectionUri);
-
-    // Same Confluent-image + explicit-readiness-wait workaround used by the
-    // other Kafka Testcontainers suites — see CLAUDE.md.
-    kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     const admin = kafka.admin();
     await admin.connect();
@@ -50,14 +34,12 @@ describe('OutboxPublisher (real Postgres + Kafka via Testcontainers)', () => {
 
     producer = createProducer(kafka);
     await producer.connect();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     await producer?.disconnect();
     await prisma?.$disconnect();
-    await kafkaContainer?.stop();
-    await db?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
   afterEach(async () => {
     await prisma.outboxEvent.deleteMany();

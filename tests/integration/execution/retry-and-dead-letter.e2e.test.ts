@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { Consumer, EachMessagePayload, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { JOB_REQUESTED_EVENT_TYPE } from '@/contracts/events/job-requested.event';
 import { createPrismaClient, type PrismaClient } from '@/db/prisma-client';
@@ -23,17 +21,12 @@ import { PrismaJobRepository } from '@/modules/jobs/infrastructure/prisma-job.re
 import { TimeoutWatchdog } from '@/modules/jobs/infrastructure/timeout-watchdog';
 import { OutboxPublisher } from '@/outbox/outbox-publisher';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const JOBS_REQUESTED_TOPIC = 'jobs.requested';
-const JOBS_STARTED_TOPIC = 'jobs.started';
-const JOBS_COMPLETED_TOPIC = 'jobs.completed';
-const JOBS_FAILED_TOPIC = 'jobs.failed';
 const JOBS_RETRY_1_TOPIC = 'jobs.retry-1';
 const JOBS_RETRY_2_TOPIC = 'jobs.retry-2';
-const JOBS_RETRY_3_TOPIC = 'jobs.retry-3';
 const JOBS_DEAD_LETTER_TOPIC = 'jobs.dead-letter';
-const JOBS_CANCELLED_TOPIC = 'jobs.cancelled';
 
 const ALWAYS_FAIL_JOB_TYPE = 'ALWAYS_FAIL';
 
@@ -62,8 +55,6 @@ async function pollUntil<T>(check: () => Promise<T | null>, timeoutMs: number, i
 }
 
 describe('retry tiers, dead-letter routing, and timeout watchdog (real Kafka + Postgres via Testcontainers)', () => {
-  let dbContainer: TestDatabase;
-  let kafkaContainer: StartedKafkaContainer;
   let prisma: PrismaClient;
   let kafka: Kafka;
   let producer: Producer;
@@ -80,35 +71,8 @@ describe('retry tiers, dead-letter routing, and timeout watchdog (real Kafka + P
   let outboxPublisher: OutboxPublisher;
 
   beforeAll(async () => {
-    dbContainer = await createTestDatabase();
-    prisma = createPrismaClient(dbContainer.connectionUri);
-
-    kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
-
-    const admin = kafka.admin();
-    await admin.connect();
-    await admin.createTopics({
-      topics: [
-        JOBS_REQUESTED_TOPIC,
-        JOBS_STARTED_TOPIC,
-        JOBS_COMPLETED_TOPIC,
-        JOBS_FAILED_TOPIC,
-        JOBS_RETRY_1_TOPIC,
-        JOBS_RETRY_2_TOPIC,
-        JOBS_RETRY_3_TOPIC,
-        JOBS_DEAD_LETTER_TOPIC,
-        JOBS_CANCELLED_TOPIC,
-      ].map((topic) => ({ topic, numPartitions: 1, replicationFactor: 1 })),
-    });
-    await admin.disconnect();
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     producer = createProducer(kafka);
     await producer.connect();
@@ -141,7 +105,7 @@ describe('retry tiers, dead-letter routing, and timeout watchdog (real Kafka + P
       onPublished: createJobOutboxPublishedHandler(jobRepository),
     });
     outboxPublisher.start();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     outboxPublisher?.stop();
@@ -154,9 +118,7 @@ describe('retry tiers, dead-letter routing, and timeout watchdog (real Kafka + P
     await jobStatusConsumer?.disconnect();
     await producer?.disconnect();
     await prisma?.$disconnect();
-    await kafkaContainer?.stop();
-    await dbContainer?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
   afterEach(async () => {
     await prisma.job.deleteMany();

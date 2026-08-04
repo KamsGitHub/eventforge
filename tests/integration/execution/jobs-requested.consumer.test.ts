@@ -1,6 +1,6 @@
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
+import { randomUUID } from 'node:crypto';
+
 import type { Consumer, EachMessagePayload, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { createEnvelope } from '@/contracts/envelope';
 import { jobCompletedEventSchemaV1 } from '@/contracts/events/job-completed.event';
@@ -17,65 +17,47 @@ import {
 } from '@/modules/execution/domain/handlers/generate-report.handler';
 import { startJobsRequestedConsumer } from '@/modules/execution/infrastructure/jobs-requested.consumer';
 
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const JOBS_REQUESTED_TOPIC = 'jobs.requested';
 const JOBS_COMPLETED_TOPIC = 'jobs.completed';
 const JOBS_FAILED_TOPIC = 'jobs.failed';
 
 describe('jobs-requested consumer (real broker via Testcontainers)', () => {
-  // Same Confluent-image + explicit-readiness-wait workaround as the
-  // Milestone 6 foundation test — see CLAUDE.md for why.
-  let container: StartedKafkaContainer;
   let kafka: Kafka;
   let producer: Producer;
   let jobsRequestedConsumer: Consumer;
-  let dbContainer: TestDatabase;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
-    dbContainer = await createTestDatabase();
-    prisma = createPrismaClient(dbContainer.connectionUri);
-
-    container = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${container.getHost()}:${container.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
-
-    const admin = kafka.admin();
-    await admin.connect();
-    await admin.createTopics({
-      topics: [JOBS_REQUESTED_TOPIC, JOBS_COMPLETED_TOPIC, JOBS_FAILED_TOPIC].map((topic) => ({
-        topic,
-        numPartitions: 1,
-        replicationFactor: 1,
-      })),
-    });
-    await admin.disconnect();
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     producer = createProducer(kafka);
     await producer.connect();
 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
     jobsRequestedConsumer = await startJobsRequestedConsumer({ kafka, producer, executeJobService, prisma });
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     await jobsRequestedConsumer?.disconnect();
     await producer?.disconnect();
-    await container?.stop();
     await prisma?.$disconnect();
-    await dbContainer?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
-  async function consumeOne(
+  /**
+   * jobs.completed/jobs.failed are the real, fixed production topics — now
+   * shared across the whole test run (see tests/integration/setup.ts), not
+   * fresh per file. `fromBeginning: true` + "resolve on the first message"
+   * would pick up a stale message from an earlier file's tests sharing the
+   * same topic, so this filters for the specific job this test created —
+   * same pattern retry-and-dead-letter.e2e.test.ts already uses.
+   */
+  async function consumeMatching(
     topic: string,
     groupId: string,
+    predicate: (body: unknown) => boolean,
   ): Promise<{ consumer: Consumer; received: Promise<EachMessagePayload> }> {
     let resolveMessage!: (payload: EachMessagePayload) => void;
     const received = new Promise<EachMessagePayload>((resolve) => {
@@ -87,7 +69,12 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
       groupId,
       fromBeginning: true,
       handler: (payload) => {
-        resolveMessage(payload);
+        const body: unknown = JSON.parse(payload.message.value?.toString() ?? '{}');
+
+        if (predicate(body)) {
+          resolveMessage(payload);
+        }
+
         return Promise.resolve();
       },
     });
@@ -96,49 +83,67 @@ describe('jobs-requested consumer (real broker via Testcontainers)', () => {
   }
 
   it('consumes JobRequested and publishes JobCompleted on success', async () => {
-    const { consumer, received } = await consumeOne(JOBS_COMPLETED_TOPIC, 'test.jobs-completed-consumer');
+    const aggregateId = `job-success-${randomUUID()}`;
+    const { consumer, received } = await consumeMatching(
+      JOBS_COMPLETED_TOPIC,
+      `test.jobs-completed-consumer.${randomUUID()}`,
+      (body) => (body as { aggregateId?: string }).aggregateId === aggregateId,
+    );
 
     const requested = createEnvelope({
       eventType: JOB_REQUESTED_EVENT_TYPE,
-      aggregateId: 'job-success-1',
+      aggregateId,
       schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
       payload: { type: GENERATE_REPORT_JOB_TYPE, payload: { reportName: 'Q1 Revenue' }, maxAttempts: 3, attempt: 1, failureHistory: [] },
     });
 
-    await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });
+    try {
+      await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });
 
-    const message = await received;
-    const parsed = jobCompletedEventSchemaV1.parse(JSON.parse(message.message.value?.toString() ?? '{}'));
+      const message = await received;
+      const parsed = jobCompletedEventSchemaV1.parse(JSON.parse(message.message.value?.toString() ?? '{}'));
 
-    expect(parsed.aggregateId).toBe('job-success-1');
-    expect(parsed.correlationId).toBe(requested.correlationId);
-    expect(parsed.causationId).toBe(requested.eventId);
-    expect(parsed.payload.result).toMatchObject({ reportName: 'Q1 Revenue' });
-
-    await consumer.disconnect();
+      expect(parsed.aggregateId).toBe(aggregateId);
+      expect(parsed.correlationId).toBe(requested.correlationId);
+      expect(parsed.causationId).toBe(requested.eventId);
+      expect(parsed.payload.result).toMatchObject({ reportName: 'Q1 Revenue' });
+    } finally {
+      // On the shared broker this group/consumer outlives a single test —
+      // an assertion throwing above must not skip this, or the leaked
+      // consumer keeps fetching after Jest tears this file's environment
+      // down (surfaces as a "require after teardown" error much later).
+      await consumer.disconnect();
+    }
   }, 120_000);
 
   it('consumes JobRequested and publishes JobFailed when the handler rejects', async () => {
-    const { consumer, received } = await consumeOne(JOBS_FAILED_TOPIC, 'test.jobs-failed-consumer');
+    const aggregateId = `job-failure-${randomUUID()}`;
+    const { consumer, received } = await consumeMatching(
+      JOBS_FAILED_TOPIC,
+      `test.jobs-failed-consumer.${randomUUID()}`,
+      (body) => (body as { aggregateId?: string }).aggregateId === aggregateId,
+    );
 
     const requested = createEnvelope({
       eventType: JOB_REQUESTED_EVENT_TYPE,
-      aggregateId: 'job-failure-1',
+      aggregateId,
       schemaVersion: JOB_REQUESTED_SCHEMA_VERSION,
       // Missing reportName — GenerateReportHandler rejects on invalid payload.
       payload: { type: GENERATE_REPORT_JOB_TYPE, payload: {}, maxAttempts: 3, attempt: 1, failureHistory: [] },
     });
 
-    await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });
+    try {
+      await publish(producer, { topic: JOBS_REQUESTED_TOPIC, key: requested.aggregateId, value: requested });
 
-    const message = await received;
-    const parsed = jobFailedEventSchemaV1.parse(JSON.parse(message.message.value?.toString() ?? '{}'));
+      const message = await received;
+      const parsed = jobFailedEventSchemaV1.parse(JSON.parse(message.message.value?.toString() ?? '{}'));
 
-    expect(parsed.aggregateId).toBe('job-failure-1');
-    expect(parsed.correlationId).toBe(requested.correlationId);
-    expect(parsed.causationId).toBe(requested.eventId);
-    expect(parsed.payload.attempt).toBe(1);
-
-    await consumer.disconnect();
+      expect(parsed.aggregateId).toBe(aggregateId);
+      expect(parsed.correlationId).toBe(requested.correlationId);
+      expect(parsed.causationId).toBe(requested.eventId);
+      expect(parsed.payload.attempt).toBe(1);
+    } finally {
+      await consumer.disconnect();
+    }
   }, 120_000);
 });

@@ -1,6 +1,4 @@
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { Consumer, EachMessagePayload, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 import { z } from 'zod';
 
 import { createEnvelope, envelopeSchema } from '@/contracts/envelope';
@@ -9,33 +7,18 @@ import { createKafkaClient } from '@/messaging/kafka-client';
 import { createProducer, publish } from '@/messaging/producer';
 
 import { createCapturingLogger } from '../../helpers/capturing-logger';
+import { sharedKafkaBrokers } from '../setup';
 
 const PING_TOPIC = '_dev.ping';
 const pingEnvelopeSchema = envelopeSchema(z.object({ message: z.string() }));
 
 describe('Kafka producer/consumer foundation (real broker via Testcontainers)', () => {
-  // Testcontainers' KafkaContainer wrapper only supports Confluent images
-  // (its Kraft bootstrap dance targets /etc/confluent/docker/*), unlike the
-  // apache/kafka image used by local docker-compose — a Confluent image is
-  // used here purely to get a hermetic broker for this test.
-  let container: StartedKafkaContainer;
   let kafka: Kafka;
   let producer: Producer;
   let consumer: Consumer | undefined;
 
   beforeAll(async () => {
-    container = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      // The library's default wait strategy only waits for the port to
-      // accept TCP connections, which fires while the broker is still
-      // initializing and resets any real request sent that early — wait for
-      // its own "started" log line instead so it's actually ready to serve.
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-    kafka = createKafkaClient({
-      brokers: [`${container.getHost()}:${container.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     const admin = kafka.admin();
     await admin.connect();
@@ -44,12 +27,11 @@ describe('Kafka producer/consumer foundation (real broker via Testcontainers)', 
 
     producer = createProducer(kafka);
     await producer.connect();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     await consumer?.disconnect();
     await producer?.disconnect();
-    await container?.stop();
   }, 30_000);
 
   it('produces and consumes a real message end-to-end, round-tripping the envelope through zod', async () => {

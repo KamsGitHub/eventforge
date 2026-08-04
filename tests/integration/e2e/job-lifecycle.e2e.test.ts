@@ -1,6 +1,4 @@
-import { KafkaContainer, type StartedKafkaContainer } from '@testcontainers/kafka';
 import type { Consumer, Kafka, Producer } from 'kafkajs';
-import { Wait } from 'testcontainers';
 
 import { buildApp } from '@/app';
 import { loadConfig } from '@/config/env';
@@ -22,17 +20,11 @@ import { OutboxPublisher } from '@/outbox/outbox-publisher';
 import { jobsTotal } from '@/shared/metrics';
 
 import { createCapturingLogger } from '../../helpers/capturing-logger';
-import { createTestDatabase, type TestDatabase } from '../helpers/postgres-test-db';
+import { sharedDatabaseUrl, sharedKafkaBrokers } from '../setup';
 
 const JOBS_REQUESTED_TOPIC = 'jobs.requested';
 const JOBS_STARTED_TOPIC = 'jobs.started';
 const JOBS_COMPLETED_TOPIC = 'jobs.completed';
-const JOBS_FAILED_TOPIC = 'jobs.failed';
-const JOBS_RETRY_1_TOPIC = 'jobs.retry-1';
-const JOBS_RETRY_2_TOPIC = 'jobs.retry-2';
-const JOBS_RETRY_3_TOPIC = 'jobs.retry-3';
-const JOBS_DEAD_LETTER_TOPIC = 'jobs.dead-letter';
-const JOBS_CANCELLED_TOPIC = 'jobs.cancelled';
 
 async function pollUntilTerminal(app: ReturnType<typeof buildApp>, jobId: string): Promise<JobResponse> {
   const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'DEAD_LETTERED']);
@@ -55,8 +47,6 @@ async function pollUntilTerminal(app: ReturnType<typeof buildApp>, jobId: string
 }
 
 describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', () => {
-  let dbContainer: TestDatabase;
-  let kafkaContainer: StartedKafkaContainer;
   let prisma: PrismaClient;
   let kafka: Kafka;
   let producer: Producer;
@@ -67,41 +57,8 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
   const kafkaSideLog = createCapturingLogger();
 
   beforeAll(async () => {
-    dbContainer = await createTestDatabase();
-    prisma = createPrismaClient(dbContainer.connectionUri);
-
-    kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-      .withKraft()
-      // Same Confluent-image + explicit-readiness-wait workaround used by
-      // the other Kafka Testcontainers suites — see CLAUDE.md.
-      .withWaitStrategy(Wait.forLogMessage(/Kafka Server started/))
-      .start();
-
-    kafka = createKafkaClient({
-      brokers: [`${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`],
-      clientId: 'eventforge-test',
-    });
-
-    const admin = kafka.admin();
-    await admin.connect();
-    await admin.createTopics({
-      topics: [
-        JOBS_REQUESTED_TOPIC,
-        JOBS_STARTED_TOPIC,
-        JOBS_COMPLETED_TOPIC,
-        JOBS_FAILED_TOPIC,
-        JOBS_RETRY_1_TOPIC,
-        JOBS_RETRY_2_TOPIC,
-        JOBS_RETRY_3_TOPIC,
-        JOBS_DEAD_LETTER_TOPIC,
-        JOBS_CANCELLED_TOPIC,
-      ].map((topic) => ({
-        topic,
-        numPartitions: 1,
-        replicationFactor: 1,
-      })),
-    });
-    await admin.disconnect();
+    prisma = createPrismaClient(sharedDatabaseUrl());
+    kafka = createKafkaClient({ brokers: sharedKafkaBrokers(), clientId: 'eventforge-test' });
 
     producer = createProducer(kafka);
     await producer.connect();
@@ -109,7 +66,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     const jobRepository = new PrismaJobRepository(prisma);
     const jobService = new JobService(jobRepository);
 
-    const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: dbContainer.connectionUri });
+    const config = loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: sharedDatabaseUrl() });
     app = buildApp({ config, jobService });
 
     const executeJobService = new ExecuteJobService(new Map([[GENERATE_REPORT_JOB_TYPE, new GenerateReportHandler()]]));
@@ -124,7 +81,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
       onPublished: createJobOutboxPublishedHandler(jobRepository),
     });
     outboxPublisher.start();
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     outboxPublisher?.stop();
@@ -133,9 +90,7 @@ describe('job lifecycle end-to-end (real Kafka + Postgres via Testcontainers)', 
     await jobStatusConsumer?.disconnect();
     await producer?.disconnect();
     await prisma?.$disconnect();
-    await kafkaContainer?.stop();
-    await dbContainer?.container.stop();
-  }, 120_000);
+  }, 30_000);
 
   afterEach(async () => {
     await prisma.job.deleteMany();
