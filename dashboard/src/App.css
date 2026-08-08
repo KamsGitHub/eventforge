@@ -1,0 +1,109 @@
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1b2430;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #d7dce2;
+}
+
+.toolbar {
+  margin-bottom: 1rem;
+}
+
+.pagination {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.error {
+  color: #b3402f;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-pending {
+  background: #e7eaee;
+  color: #5b6472;
+}
+.status-queued {
+  background: #dbe8f6;
+  color: #2563a8;
+}
+.status-running {
+  background: #f7ecd2;
+  color: #b5891f;
+}
+.status-succeeded {
+  background: #dcf0e3;
+  color: #1f7a4d;
+}
+.status-failed {
+  background: #f6dcd7;
+  color: #b3402f;
+}
+.status-dead {
+  background: #f0d4d8;
+  color: #7a2734;
+}
+.status-cancelled {
+  background: #e6ddf5;
+  color: #6b4fa0;
+}
+
+.job-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.job-fields dt {
+  font-weight: 600;
+  color: #5b6472;
+}
+
+.timeline {
+  padding-left: 1.25rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.actions button {
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+pre {
+  background: #e9edf1;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+}
