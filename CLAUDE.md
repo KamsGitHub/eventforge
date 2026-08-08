@@ -193,6 +193,26 @@ Every integration/e2e test file already used Testcontainers directly since M6 �
 - **Not yet, deliberately**: a CI matrix across OS/Node versions (a single Linux/Node LTS target is sufficient per the roadmap).
 - **`tests/integration/messaging/kafka.foundation.test.ts`'s two `it`s got their per-test Jest timeout bumped from 120s to 180s** after the first real CI run under the shared-broker setup failed at 120.686s on the second test — just barely over. By the time that file runs, the shared broker (2 vCPUs on GitHub's hosted runner) has already handled group-join/rebalance traffic from every earlier file's consumer groups in the same run, which a brand-new consumer group's initial join apparently feels more than the other suites do. No logic bug found; widening the timeout was the proportionate fix given every other file (including both new fixture-process tests) passed cleanly on the same run.
 
+### Operational dashboard (Milestone 16)
+
+`dashboard/` is a separate Vite + React + TS app — its own `package.json`, lint (`oxlint`, not the root's type-checked ESLint config), and tests (Vitest + React Testing Library) — that only ever talks to the existing REST API. It never imports server code, and never touches Postgres or Kafka directly; this is the boundary the milestone exists to establish, mirroring the module-boundary discipline `src/modules/` has kept since M1, one layer up (client vs. server rather than module vs. module).
+
+- **`dashboard/vite.config.ts` proxies `/api` to `http://localhost:3000`** in dev, specifically so the browser never makes a cross-origin request — this avoids adding CORS handling to `app.ts` for what's supposed to stay a thin, boundary-respecting client.
+- **`dashboard/src/api/client.ts` hand-mirrors `JobResponseSchema`/`JobResponse` from `modules/jobs/api/schemas.ts`** as a plain TypeScript type rather than importing the server's zod schema — importing server code at all, even just a schema, would be exactly the violation this milestone's boundary is meant to prevent.
+- **`usePolling` (`dashboard/src/hooks/usePolling.ts`)** is the one piece of shared logic between the list and detail pages: fetch immediately, then on an interval, until unmount or deps change. This is the "polling" the roadmap's completion criteria asks for — WebSocket/SSE push is an explicit stretch goal, not required here.
+- **Retry/cancel buttons enforce the same state-machine rules the API already enforces**, client-side, purely for UX (disabled instead of a wasted round-trip that'd 409): cancel enabled for `PENDING`/`QUEUED`/`RUNNING` jobs with `cancelRequested` still `false`; retry enabled only for `FAILED`/`DEAD_LETTERED`. The server remains the actual source of truth — a stale client render that lets a now-invalid action through still just gets a 409 back.
+- **Root `eslint.config.mjs` excludes `dashboard/**`** — the root tsconfig's `include` never covered `dashboard/src` to begin with, so type-checked linting against it couldn't have worked anyway; the dashboard keeps its own scaffold-provided tooling instead of being forced onto the server's.
+- **Not yet, deliberately**: auth/RBAC, real-time push (both explicitly out of scope per the roadmap).
+
+### Modular-boundary validation (Milestone 17)
+
+A checkpoint, not a feature — the green light to start the M18 `execution` service extraction. `.dependency-cruiser.cjs`'s `no-cross-module-internals` and `shared-must-not-depend-on-modules` rules were already `severity: 'error'` since M1 (CI already fails on a violation); this milestone re-verifies and documents that, rather than changing enforcement.
+
+- **`scripts/check-boundaries.sh`** runs the same check `npm run boundaries` does, then regenerates the dependency graph — one command that both enforces and visualizes the rule, so the two can't silently drift apart.
+- **`scripts/render-dependency-graph.mjs`** renders `dependency-cruiser`'s `--output-type dot` output to `docs/dependency-graph.svg` via `@hpcc-js/wasm-graphviz` (WASM Graphviz) instead of shelling out to a system `dot` binary — deliberately, since a portfolio project's dev setup shouldn't assume Graphviz is installed.
+- **`docs/boundary-audit.md`** documents both the mechanical check and a manual grep audit (`grep -rn "from '.*modules/jobs" src/modules/execution/` and its inverse, plus a broader cross-module-internals pattern across every module) — belt-and-suspenders on top of the dependency-cruiser rule, and the artifact this milestone's "prove the boundary before cutting a real service" objective actually points at. Both came back clean: zero direct imports of another module's `application`/`domain`/`infrastructure` anywhere in `src/modules/`.
+- **Not yet, deliberately**: nothing new — this milestone is a gate, not a feature.
+
 ## Architecture
 
 ### Module boundary rule (the load-bearing constraint)

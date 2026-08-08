@@ -13,6 +13,10 @@ export default tseslint.config(
       '*.config.mjs',
       '*.config.js',
       '.dependency-cruiser.cjs',
+      // Plain Node ESM utility scripts (Milestone 17's graph renderer),
+      // same category as the root *.config.mjs files above — not part of
+      // the typed src/tests program, so type-checked linting can't apply.
+      'scripts/**',
       // The dashboard (Milestone 16) is a separate app with its own
       // package.json/tsconfig/lint tooling (oxlint) — it's a pure HTTP
       // client of the API, never sharing code with the server, so it's
