@@ -20,7 +20,14 @@ services:
   kafka:
     image: apache/kafka:4.3.1
     ports:
-      - '9092:9092'
+      # Host port 9092 must map to the container's PLAINTEXT_HOST listener
+      # (29092), not its PLAINTEXT listener (also 9092) — PLAINTEXT is
+      # advertised as kafka:9092, which only resolves inside the Docker
+      # network. Mapping 9092:9092 here lets a host client's initial
+      # bootstrap connection succeed, but every subsequent request (using
+      # the broker metadata returned by that bootstrap) tries to reach
+      # kafka:9092 and fails with ENOTFOUND.
+      - '9092:29092'
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
